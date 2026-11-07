@@ -132,7 +132,6 @@ function SidebarLink({ item, pathname }: { item: NavItem; pathname: string }) {
 
   return (
     <Button
-      asChild
       variant="ghost"
       className={cn(
         "h-10 w-full justify-start gap-3 rounded-lg px-3 text-sm font-medium",
@@ -153,7 +152,7 @@ function SidebarLink({ item, pathname }: { item: NavItem; pathname: string }) {
 function WorkspaceSwitcher() {
   return (
     <DropdownMenu>
-      <DropdownMenuTrigger asChild>
+      <DropdownMenuTrigger>
         <Button
           variant="ghost"
           className="h-auto w-full justify-between rounded-xl p-2 hover:bg-muted"
@@ -224,7 +223,7 @@ function ProjectFolder({
 
   return (
     <Collapsible open={open} onOpenChange={setOpen}>
-      <CollapsibleTrigger asChild>
+      <CollapsibleTrigger>
         <Button
           variant="ghost"
           className="group h-9 w-full justify-start gap-2 rounded-lg px-3 text-sm font-medium text-muted-foreground hover:text-foreground"
@@ -250,7 +249,6 @@ function ProjectFolder({
             return (
               <Button
                 key={project.href}
-                asChild
                 variant="ghost"
                 className={cn(
                   "h-9 w-full justify-start gap-2 rounded-lg px-2 text-sm",
@@ -289,7 +287,7 @@ export function Sidebar({ className }: { className?: string }) {
   return (
     <aside
       className={cn(
-        "flex h-screen w-[270px] shrink-0 flex-col border-r bg-background",
+        "flex h-screen w-[370px] shrink-0 flex-col border-r bg-background",
         className,
       )}
     >
@@ -330,7 +328,6 @@ export function Sidebar({ className }: { className?: string }) {
           </p>
 
           <Button
-            asChild
             variant="ghost"
             size="icon"
             className="size-7 text-muted-foreground"
@@ -354,7 +351,6 @@ export function Sidebar({ className }: { className?: string }) {
 
         {/* Create project */}
         <Button
-          asChild
           variant="outline"
           className="mt-4 h-9 w-full justify-start gap-2 rounded-lg border-dashed text-sm text-muted-foreground"
         >
@@ -376,7 +372,6 @@ export function Sidebar({ className }: { className?: string }) {
       {/* Bottom navigation */}
       <div className="space-y-1 px-3 py-3">
         <Button
-          asChild
           variant="ghost"
           className="h-9 w-full justify-start gap-3 rounded-lg px-3 text-sm text-muted-foreground"
         >
@@ -387,7 +382,6 @@ export function Sidebar({ className }: { className?: string }) {
         </Button>
 
         <Button
-          asChild
           variant="ghost"
           className="h-9 w-full justify-start gap-3 rounded-lg px-3 text-sm text-muted-foreground"
         >
@@ -402,7 +396,7 @@ export function Sidebar({ className }: { className?: string }) {
 
       {/* User profile */}
       <DropdownMenu>
-        <DropdownMenuTrigger asChild>
+        <DropdownMenuTrigger>
           <Button
             variant="ghost"
             className="h-auto w-full justify-start gap-3 rounded-none px-4 py-4"
@@ -426,13 +420,13 @@ export function Sidebar({ className }: { className?: string }) {
         <DropdownMenuContent align="end" side="top" className="w-56">
           <DropdownMenuLabel>My Account</DropdownMenuLabel>
           <DropdownMenuSeparator />
-          <DropdownMenuItem asChild>
+          <DropdownMenuItem>
             <Link href="/profile">
               <Users className="mr-2 size-4" />
               Profile
             </Link>
           </DropdownMenuItem>
-          <DropdownMenuItem asChild>
+          <DropdownMenuItem>
             <Link href="/settings">
               <Settings className="mr-2 size-4" />
               Settings
