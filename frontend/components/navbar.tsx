@@ -3,62 +3,36 @@
 import * as React from "react";
 import {
   ChevronRight,
-  Circle,
   CircleHelp,
-  Columns3,
-  List,
   Search,
-  Table2,
 } from "lucide-react";
 import { usePathname } from "next/navigation";
 
 import { cn } from "@/lib/utils";
 import { useApp } from "@/lib/app-context";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { apiRequest, type WorkspaceMember } from "@/lib/api";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
-
-const TABS = [
-  { value: "overview", label: "Overview", icon: Circle },
-  { value: "board", label: "Board", icon: Columns3 },
-  { value: "list", label: "List", icon: List },
-  { value: "table", label: "Table", icon: Table2 },
-] as const;
-
-export type ViewTab = (typeof TABS)[number]["value"];
-
-const MEMBERS = [
-  { initials: "JD", color: "bg-pink-500" },
-  { initials: "RK", color: "bg-green-500" },
-  { initials: "AM", color: "bg-violet-500" },
-  { initials: "OL", color: "bg-cyan-500" },
-];
 
 interface NavbarProps {
   breadcrumb?: string[];
   title?: string;
-  heading?: string;
-  description?: string;
-  activeTab?: ViewTab;
-  onTabChange?: (tab: ViewTab) => void;
-  extraMembers?: number;
   className?: string;
 }
 
 export function Navbar({
   breadcrumb,
   title,
-  heading = "Task",
-  description = "Short description will be placed here",
-  activeTab = "board",
-  onTabChange,
-  extraMembers = 11,
   className,
 }: NavbarProps) {
   const pathname = usePathname();
-  const { projects, selectedWorkspace } = useApp();
-  const projectId = pathname.match(/^\/projects\/(\d+)$/)?.[1];
+  const { projects, selectedProject, selectedWorkspace, selectedWorkspaceId } = useApp();
+  const [members, setMembers] = React.useState<WorkspaceMember[]>([]);
+  const [membersError, setMembersError] = React.useState<string | null>(null);
+  const projectId = pathname.match(
+    /^\/(?:projects|workspace\/[^/]+\/project)\/(\d+)$/,
+  )?.[1];
   const activeProject = projects.find(
     (project) => project.id === Number(projectId),
   );
@@ -66,11 +40,49 @@ export function Navbar({
     breadcrumb ??
     (activeProject
       ? [selectedWorkspace?.name ?? "Projects", activeProject.name]
+      : selectedProject
+        ? [selectedWorkspace?.name ?? "Projects", selectedProject.name]
       : selectedWorkspace
         ? ["Projects", selectedWorkspace.name]
         : ["Projects"]);
   const activeTitle =
-    title ?? activeProject?.name ?? selectedWorkspace?.name ?? "Projects";
+    title ??
+    activeProject?.name ??
+    selectedProject?.name ??
+    selectedWorkspace?.name ??
+    "Projects";
+
+  React.useEffect(() => {
+    let active = true;
+    async function loadMembers() {
+      await Promise.resolve();
+      if (!active) return;
+      setMembers([]);
+      setMembersError(null);
+      if (!selectedWorkspaceId) return;
+
+      try {
+        setMembers(
+          await apiRequest<WorkspaceMember[]>(
+            `/workspaces/${selectedWorkspaceId}/members/`,
+          ),
+        );
+      } catch (reason) {
+        if (active) {
+          setMembersError(
+            reason instanceof Error
+              ? reason.message
+              : "Could not load workspace members.",
+          );
+        }
+      }
+    }
+    void loadMembers();
+
+    return () => {
+      active = false;
+    };
+  }, [selectedWorkspaceId]);
 
   return (
     <header className={cn("bg-background", className)}>
@@ -105,20 +117,35 @@ export function Navbar({
         <div className="flex items-center gap-4">
           <div className="flex items-center gap-3 rounded-full border bg-background py-1.5 pl-2 pr-1.5 shadow-sm">
             <div className="flex items-center -space-x-2">
-              {MEMBERS.map((m) => (
-                <Avatar key={m.initials} className="size-8 border-2 border-background">
+              {members.slice(0, 4).map(({ user }) => (
+                <Avatar key={user.id} className="size-8 border-2 border-background">
+                  <AvatarImage src={user.avatar_url || undefined} alt={user.full_name} />
                   <AvatarFallback
-                    className={cn("text-[11px] font-semibold text-white", m.color)}
+                    className="bg-primary text-[11px] font-semibold text-primary-foreground"
+                    aria-label={user.full_name}
                   >
-                    {m.initials}
+                    {user.full_name
+                      .trim()
+                      .split(/\s+/)
+                      .slice(0, 2)
+                      .map((part) => part[0] ?? "")
+                      .join("")
+                      .toUpperCase()}
                   </AvatarFallback>
                 </Avatar>
               ))}
-              <Avatar className="size-8 border-2 border-background">
-                <AvatarFallback className="bg-muted text-xs font-semibold text-primary">
-                  +{extraMembers}
-                </AvatarFallback>
-              </Avatar>
+              {members.length > 4 && (
+                <Avatar className="size-8 border-2 border-background">
+                  <AvatarFallback className="bg-muted text-xs font-semibold text-primary">
+                    +{members.length - 4}
+                  </AvatarFallback>
+                </Avatar>
+              )}
+              {membersError && (
+                <span role="alert" className="sr-only">
+                  {membersError}
+                </span>
+              )}
             </div>
             <Button className="h-9 rounded-full px-5 shadow-md shadow-primary/30">
               Share

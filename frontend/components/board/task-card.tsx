@@ -3,36 +3,36 @@
 import * as React from "react";
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { FileText, Flag, MessageCircle, MoreHorizontal, Paperclip } from "lucide-react";
+import { Flag, MessageCircle, MoreHorizontal, Tags } from "lucide-react";
 
 import { cn } from "@/lib/utils";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
-import type { ColumnId, Platform, Priority, Task } from "@/components/board/board-data";
-
-const PLATFORM_STYLES: Record<Platform, string> = {
-  "UI/UX": "border-blue-300 bg-blue-500/10 text-blue-600",
-  ANDROID: "border-amber-300 bg-amber-500/10 text-amber-600",
-  IOS: "border-border bg-muted text-muted-foreground",
-};
+import type { ColumnId, Priority, Task } from "@/components/board/board-data";
 
 const PRIORITY_STYLES: Record<Priority, string> = {
   Low: "bg-green-500/10 text-green-600",
   Medium: "bg-orange-500/10 text-orange-600",
   High: "bg-red-500/10 text-red-600",
+  Urgent: "bg-red-500/10 text-red-700",
 };
 
 interface TaskCardProps extends React.HTMLAttributes<HTMLDivElement> {
   task: Task;
-  columnId: ColumnId;
   isDragging?: boolean;
   overlay?: boolean;
 }
 
 export const TaskCard = React.forwardRef<HTMLDivElement, TaskCardProps>(
-  ({ task, columnId, isDragging, overlay, className, ...props }, ref) => {
-    const { done, total } = task.subtasks;
-    const pct = total ? (done / total) * 100 : 0;
+  ({ task, isDragging, overlay, className, ...props }, ref) => {
+    const label = task.labels[0];
+    const dueDate = task.dueDate
+      ? new Date(`${task.dueDate}T00:00:00`).toLocaleDateString("en-US", {
+          month: "short",
+          day: "numeric",
+          year: "numeric",
+        })
+      : "No due date";
 
     return (
       <div
@@ -47,14 +47,22 @@ export const TaskCard = React.forwardRef<HTMLDivElement, TaskCardProps>(
         {...props}
       >
         <div className="flex items-start justify-between">
-          <span
-            className={cn(
-              "rounded-md border px-2 py-0.5 text-xs font-medium",
-              PLATFORM_STYLES[task.platform],
-            )}
-          >
-            {task.platform}
-          </span>
+          {label ? (
+            <span
+              className="rounded-md border px-2 py-0.5 text-xs font-medium"
+              style={{
+                borderColor: label.color,
+                backgroundColor: `${label.color}1a`,
+                color: label.color,
+              }}
+            >
+              {label.name}
+            </span>
+          ) : (
+            <span className="rounded-md border bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground">
+              Task
+            </span>
+          )}
           <Button
             variant="ghost"
             size="icon"
@@ -67,23 +75,16 @@ export const TaskCard = React.forwardRef<HTMLDivElement, TaskCardProps>(
 
         <h4 className="mt-3 text-[15px] font-semibold leading-snug">{task.title}</h4>
 
-        <p className="mt-5 text-sm text-muted-foreground">
-          {done}/{total}
-        </p>
-        <div className="mt-1.5 h-1.5 w-full overflow-hidden rounded-full bg-muted">
-          <div
-            className={cn(
-              "h-full rounded-full transition-all",
-              columnId === "done" ? "bg-green-500" : "bg-orange-500",
-            )}
-            style={{ width: `${pct}%` }}
-          />
-        </div>
+        {task.description && (
+          <p className="mt-3 line-clamp-2 text-sm text-muted-foreground">
+            {task.description}
+          </p>
+        )}
 
-        <div className="mt-3 flex items-center justify-between text-sm text-muted-foreground">
+        <div className="mt-5 flex items-center justify-between text-sm text-muted-foreground">
           <span className="flex items-center gap-2">
             <Flag className="size-4" />
-            {task.dueDate}
+            {dueDate}
           </span>
           <span
             className={cn(
@@ -99,7 +100,8 @@ export const TaskCard = React.forwardRef<HTMLDivElement, TaskCardProps>(
           <span className="text-sm text-muted-foreground">Assignees:</span>
           <div className="flex -space-x-2">
             {task.assignees.map((a) => (
-              <Avatar key={a.initials} className="size-8 border-2 border-background">
+              <Avatar key={a.id} className="size-8 border-2 border-background">
+                <AvatarImage src={a.avatar_url || undefined} alt={a.full_name} />
                 <AvatarFallback
                   className={cn("text-xs font-semibold text-white", a.color)}
                 >
@@ -116,12 +118,8 @@ export const TaskCard = React.forwardRef<HTMLDivElement, TaskCardProps>(
             {task.comments} Comments
           </span>
           <span className="flex items-center gap-1.5">
-            <Paperclip className="size-4" />
-            {task.links} Links
-          </span>
-          <span className="flex items-center gap-1.5">
-            <FileText className="size-4" />
-            {task.files.done}/{task.files.total}
+            <Tags className="size-4" />
+            {task.labels.length} Labels
           </span>
         </div>
       </div>
@@ -145,7 +143,6 @@ export function SortableTaskCard({
       ref={setNodeRef}
       style={{ transform: CSS.Transform.toString(transform), transition }}
       task={task}
-      columnId={columnId}
       isDragging={isDragging}
       {...attributes}
       {...listeners}

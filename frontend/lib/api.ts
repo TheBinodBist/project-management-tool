@@ -21,6 +21,13 @@ export type Workspace = {
   created_at: string;
 };
 
+export type WorkspaceMember = {
+  id: number;
+  user: ApiUser;
+  role: string;
+  joined_at: string;
+};
+
 export type Project = {
   id: number;
   workspace: number;
@@ -30,6 +37,35 @@ export type Project = {
   created_by: ApiUser | null;
   created_at: string;
   updated_at: string;
+};
+
+export type Board = {
+  id: number;
+  project: number;
+  name: string;
+  position: number;
+  columns?: BoardColumn[];
+};
+
+export type BoardColumn = {
+  id: number;
+  board: number;
+  name: string;
+  position: number;
+  tasks?: ApiTask[];
+};
+
+export type ApiTask = {
+  id: number;
+  column: number;
+  title: string;
+  description: string;
+  priority: "low" | "medium" | "high" | "urgent";
+  due_date: string | null;
+  position: number;
+  assignees: ApiUser[];
+  labels: { id: number; name: string; color: string }[];
+  comment_count: number;
 };
 
 type TokenPair = {

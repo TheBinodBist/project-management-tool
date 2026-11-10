@@ -14,10 +14,18 @@ interface KanbanColumnProps {
   title: string;
   dot: string;
   tasks: Task[];
+  canAddCard?: boolean;
   onAddCard: (columnId: ColumnId) => void;
 }
 
-export function KanbanColumn({ id, title, dot, tasks, onAddCard }: KanbanColumnProps) {
+export function KanbanColumn({
+  id,
+  title,
+  dot,
+  tasks,
+  canAddCard = true,
+  onAddCard,
+}: KanbanColumnProps) {
   const { setNodeRef, isOver } = useDroppable({ id, data: { type: "column" } });
 
   return (
@@ -60,6 +68,7 @@ export function KanbanColumn({ id, title, dot, tasks, onAddCard }: KanbanColumnP
       <div className="border-t bg-background/60 p-3">
         <Button
           variant="outline"
+          disabled={!canAddCard}
           onClick={() => onAddCard(id)}
           className="h-10 w-full border-dashed text-muted-foreground"
         >

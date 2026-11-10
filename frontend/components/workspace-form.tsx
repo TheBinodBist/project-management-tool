@@ -23,7 +23,7 @@ export function WorkspaceForm() {
     setSubmitting(true);
     try {
       await createWorkspace(name.trim(), description.trim());
-      router.push("/");
+      router.replace("/projects/new");
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "Could not create workspace.");
     } finally {

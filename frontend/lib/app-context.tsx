@@ -20,13 +20,19 @@ type AppContextValue = {
   workspaces: Workspace[];
   projects: Project[];
   projectsLoading: boolean;
+  projectsLoaded: boolean;
+  projectsWorkspaceId: number | null;
+  selectedProjectId: number | null;
+  selectedProject: Project | null;
   projectsError: string | null;
+  workspaceSelectionLoaded: boolean;
   selectedWorkspace: Workspace | null;
   selectedWorkspaceId: number | null;
   loading: boolean;
   projectSearch: string;
   setProjectSearch: (value: string) => void;
   selectWorkspace: (id: number) => void;
+  selectProject: (id: number, workspaceId?: number | null) => void;
   login: (email: string, password: string) => Promise<void>;
   register: (email: string, name: string, password: string) => Promise<void>;
   logout: () => void;
@@ -37,6 +43,8 @@ type AppContextValue = {
 
 const AppContext = React.createContext<AppContextValue | null>(null);
 const SELECTED_WORKSPACE_KEY = "project-workspace.selected-workspace";
+const selectedProjectKey = (workspaceId: number) =>
+  `project-workspace.selected-project.${workspaceId}`;
 
 export function AppProvider({ children }: { children: React.ReactNode }) {
   const router = useRouter();
@@ -45,25 +53,32 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const [workspaces, setWorkspaces] = React.useState<Workspace[]>([]);
   const [projects, setProjects] = React.useState<Project[]>([]);
   const [projectsLoading, setProjectsLoading] = React.useState(false);
+  const [projectsLoaded, setProjectsLoaded] = React.useState(false);
+  const [projectsWorkspaceId, setProjectsWorkspaceId] = React.useState<number | null>(null);
+  const [selectedProjectId, setSelectedProjectId] = React.useState<number | null>(null);
   const [projectsError, setProjectsError] = React.useState<string | null>(null);
   const [selectedWorkspaceId, setSelectedWorkspaceId] = React.useState<number | null>(null);
+  const [workspaceSelectionLoaded, setWorkspaceSelectionLoaded] = React.useState(false);
   const [loading, setLoading] = React.useState(true);
   const [projectSearch, setProjectSearch] = React.useState("");
   const isAuthPage = pathname === "/login" || pathname === "/register";
+  const projectRequestId = React.useRef(0);
 
-  const loadWorkspaces = React.useCallback(async () => {
+  const loadWorkspaces = React.useCallback(async (routeSlug?: string) => {
     const result = await apiRequest<Workspace[]>("/workspaces/");
-    setWorkspaces(result);
-    setSelectedWorkspaceId((current) => {
-      const saved = window.localStorage.getItem(SELECTED_WORKSPACE_KEY);
-      const preferred = current ?? (saved ? Number(saved) : null);
-      const next = result.some((workspace) => workspace.id === preferred)
+    const saved = window.localStorage.getItem(SELECTED_WORKSPACE_KEY);
+    const preferred = saved ? Number(saved) : null;
+    const routeWorkspace = result.find((workspace) => workspace.slug === routeSlug);
+    const next = routeWorkspace?.id ??
+      (result.some((workspace) => workspace.id === preferred)
         ? preferred
-        : result[0]?.id ?? null;
-      if (next === null) window.localStorage.removeItem(SELECTED_WORKSPACE_KEY);
-      else window.localStorage.setItem(SELECTED_WORKSPACE_KEY, String(next));
-      return next;
-    });
+        : result[0]?.id ?? null);
+
+    setWorkspaces(result);
+    setSelectedWorkspaceId(next);
+    if (next === null) window.localStorage.removeItem(SELECTED_WORKSPACE_KEY);
+    else window.localStorage.setItem(SELECTED_WORKSPACE_KEY, String(next));
+    setWorkspaceSelectionLoaded(true);
   }, []);
 
   React.useEffect(() => {
@@ -83,7 +98,10 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         const currentUser = await apiRequest<ApiUser>("/auth/me/");
         if (!active) return;
         setUser(currentUser);
-        await loadWorkspaces();
+        const routeSlug = window.location.pathname.match(
+          /^\/workspace\/([^/]+)\/project\/\d+$/,
+        )?.[1];
+        await loadWorkspaces(routeSlug);
       } catch {
         if (!active) return;
         clearTokens();
@@ -98,48 +116,107 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     return () => {
       active = false;
     };
-  }, [isAuthPage, loadWorkspaces, pathname, router]);
+  }, [isAuthPage, loadWorkspaces, router]);
 
   React.useEffect(() => {
     let active = true;
+    const requestId = ++projectRequestId.current;
     async function loadProjects() {
-      if (!user || !selectedWorkspaceId) {
-        setProjects([]);
-        setProjectsError(null);
-        setProjectsLoading(false);
+      if (!user || !workspaceSelectionLoaded) return;
+
+      if (!selectedWorkspaceId) {
+        if (active && requestId === projectRequestId.current) {
+          setProjects([]);
+          setProjectsError(null);
+          setProjectsLoading(false);
+          setProjectsLoaded(true);
+          setProjectsWorkspaceId(null);
+          setSelectedProjectId(null);
+        }
         return;
       }
       setProjectsLoading(true);
+      setProjectsLoaded(false);
       setProjectsError(null);
       try {
         const result = await apiRequest<Project[]>(
           `/projects/?workspace=${selectedWorkspaceId}`,
         );
-        if (active) setProjects(result);
+        if (active && requestId === projectRequestId.current) {
+          setProjects(result);
+          const savedProjectId = window.localStorage.getItem(
+            selectedProjectKey(selectedWorkspaceId),
+          );
+          const preferredProjectId = savedProjectId ? Number(savedProjectId) : null;
+          const routeProjectId = window.location.pathname.match(
+            /^\/workspace\/[^/]+\/project\/(\d+)$/,
+          )?.[1];
+          const routeProject = routeProjectId
+            ? Number(routeProjectId)
+            : null;
+          const nextProjectId = result.some(
+            (project) => project.id === routeProject,
+          )
+            ? routeProject
+            : result.some((project) => project.id === preferredProjectId)
+              ? preferredProjectId
+              : result[0]?.id ?? null;
+          setSelectedProjectId(nextProjectId);
+          if (nextProjectId === null) {
+            window.localStorage.removeItem(selectedProjectKey(selectedWorkspaceId));
+          } else {
+            window.localStorage.setItem(
+              selectedProjectKey(selectedWorkspaceId),
+              String(nextProjectId),
+            );
+          }
+          setProjectsLoaded(true);
+          setProjectsWorkspaceId(selectedWorkspaceId);
+        }
       } catch (error) {
-        if (active) {
+        if (active && requestId === projectRequestId.current) {
+          setProjects([]);
           setProjectsError(
             error instanceof Error ? error.message : "Could not load projects.",
           );
+          setProjectsLoaded(true);
+          setProjectsWorkspaceId(selectedWorkspaceId);
+          setSelectedProjectId(null);
         }
       } finally {
-        if (active) setProjectsLoading(false);
+        if (active && requestId === projectRequestId.current) {
+          setProjectsLoading(false);
+        }
       }
     }
     void loadProjects();
     return () => {
       active = false;
     };
-  }, [selectedWorkspaceId, user]);
+  }, [selectedWorkspaceId, user, workspaceSelectionLoaded]);
 
   const selectedWorkspace =
     workspaces.find((workspace) => workspace.id === selectedWorkspaceId) ?? null;
+  const selectedProject =
+    projects.find((project) => project.id === selectedProjectId) ?? null;
 
   const selectWorkspace = React.useCallback((id: number) => {
+    projectRequestId.current += 1;
+    setProjectsLoaded(false);
     setSelectedWorkspaceId(id);
+    setSelectedProjectId(null);
     window.localStorage.setItem(SELECTED_WORKSPACE_KEY, String(id));
   }, []);
 
+  const selectProject = React.useCallback(
+    (id: number, workspaceId = selectedWorkspaceId) => {
+      setSelectedProjectId(id);
+      if (workspaceId) {
+        window.localStorage.setItem(selectedProjectKey(workspaceId), String(id));
+      }
+    },
+    [selectedWorkspaceId],
+  );
   const acceptTokens = React.useCallback(
     async (tokens: { access: string; refresh: string; user: ApiUser }) => {
       saveTokens(tokens);
@@ -178,6 +255,10 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     setUser(null);
     setWorkspaces([]);
     setProjects([]);
+    setProjectsLoaded(false);
+    setProjectsWorkspaceId(null);
+    setSelectedProjectId(null);
+    window.localStorage.removeItem(SELECTED_WORKSPACE_KEY);
     router.replace("/login");
   }, [router]);
 
@@ -205,7 +286,42 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           description,
         }),
       });
-      setProjects((current) => [...current, project]);
+      try {
+        await apiRequest("/boards/", {
+          method: "POST",
+          body: JSON.stringify({
+            project: project.id,
+            name: project.name,
+            create_default_columns: true,
+          }),
+        });
+      } catch (error) {
+        projectRequestId.current += 1;
+        setProjects((current) => [...current, project]);
+        setProjectsLoaded(true);
+        setProjectsWorkspaceId(selectedWorkspaceId);
+        setSelectedProjectId(project.id);
+        window.localStorage.setItem(
+          selectedProjectKey(selectedWorkspaceId),
+          String(project.id),
+        );
+        const message =
+          error instanceof Error ? error.message : "Could not create the project board.";
+        throw new Error(`Project created, but its board could not be initialized: ${message}`);
+      }
+      projectRequestId.current += 1;
+      setProjects((current) =>
+        current.some((existing) => existing.id === project.id)
+          ? current
+          : [...current, project],
+      );
+      setProjectsLoaded(true);
+      setProjectsWorkspaceId(selectedWorkspaceId);
+      setSelectedProjectId(project.id);
+      window.localStorage.setItem(
+        selectedProjectKey(selectedWorkspaceId),
+        String(project.id),
+      );
       return project;
     },
     [selectedWorkspaceId],
@@ -213,22 +329,51 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
   const refreshProjects = React.useCallback(async () => {
     if (!selectedWorkspaceId) {
+      projectRequestId.current += 1;
       setProjects([]);
+      setProjectsLoaded(true);
+      setProjectsWorkspaceId(null);
+      setSelectedProjectId(null);
       return;
     }
+    const requestId = ++projectRequestId.current;
     setProjectsLoading(true);
     setProjectsError(null);
     try {
       const result = await apiRequest<Project[]>(
         `/projects/?workspace=${selectedWorkspaceId}`,
       );
-      setProjects(result);
+      if (requestId === projectRequestId.current) {
+        setProjects(result);
+        setProjectsLoaded(true);
+        setProjectsWorkspaceId(selectedWorkspaceId);
+        const savedProjectId = window.localStorage.getItem(
+          selectedProjectKey(selectedWorkspaceId),
+        );
+        const preferredProjectId = savedProjectId ? Number(savedProjectId) : null;
+        const nextProjectId = result.some(
+          (project) => project.id === preferredProjectId,
+        )
+          ? preferredProjectId
+          : result[0]?.id ?? null;
+        setSelectedProjectId(nextProjectId);
+        if (nextProjectId !== null) {
+          window.localStorage.setItem(
+            selectedProjectKey(selectedWorkspaceId),
+            String(nextProjectId),
+          );
+        }
+      }
     } catch (error) {
       const message =
         error instanceof Error ? error.message : "Could not load projects.";
-      setProjectsError(message);
+      if (requestId === projectRequestId.current) {
+        setProjectsError(message);
+        setProjectsLoaded(true);
+        setProjectsWorkspaceId(selectedWorkspaceId);
+      }
     } finally {
-      setProjectsLoading(false);
+      if (requestId === projectRequestId.current) setProjectsLoading(false);
     }
   }, [selectedWorkspaceId]);
 
@@ -238,13 +383,19 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       workspaces,
       projects,
       projectsLoading,
+      projectsLoaded,
+      projectsWorkspaceId,
+      selectedProjectId,
+      selectedProject,
       projectsError,
+      workspaceSelectionLoaded,
       selectedWorkspace,
       selectedWorkspaceId,
       loading,
       projectSearch,
       setProjectSearch,
       selectWorkspace,
+      selectProject,
       login,
       register,
       logout,
@@ -257,12 +408,18 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       workspaces,
       projects,
       projectsLoading,
+      projectsLoaded,
+      projectsWorkspaceId,
+      selectedProjectId,
+      selectedProject,
       projectsError,
+      workspaceSelectionLoaded,
       selectedWorkspace,
       selectedWorkspaceId,
       loading,
       projectSearch,
       selectWorkspace,
+      selectProject,
       login,
       register,
       logout,

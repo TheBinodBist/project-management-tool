@@ -22,6 +22,7 @@ import {
 
 import { cn } from "@/lib/utils";
 import { useApp } from "@/lib/app-context";
+import { workspaceProjectPath } from "@/lib/routes";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -50,6 +51,7 @@ type NavItem = {
 };
 
 type Project = {
+  id: number;
   name: string;
   href: string;
   color: string;
@@ -178,10 +180,14 @@ function ProjectFolder({
   group,
   pathname,
   search,
+  selectedProjectId,
+  selectProject,
 }: {
   group: ProjectGroup;
   pathname: string;
   search: string;
+  selectedProjectId: number | null;
+  selectProject: (id: number) => void;
 }) {
   const hasActiveProject = group.children.some(
     (project) =>
@@ -222,9 +228,11 @@ function ProjectFolder({
       <CollapsibleContent>
         <div className="ml-3 space-y-1 border-l pl-3 pt-1">
           {filteredProjects.map((project) => {
+            const projectId = project.id;
             const active =
               pathname === project.href ||
-              pathname.startsWith(`${project.href}/`);
+              pathname.startsWith(`${project.href}/`) ||
+              (pathname === "/" && projectId === selectedProjectId);
 
             return (
               <Button
@@ -238,6 +246,7 @@ function ProjectFolder({
                 )}
                 nativeButton={false}
                 render={<Link href={project.href} />}
+                onClick={() => selectProject(projectId)}
               >
                 <span
                   className={cn(
@@ -263,12 +272,31 @@ function ProjectFolder({
 export function Sidebar({ className }: { className?: string }) {
   const pathname = usePathname();
   const [search, setSearch] = React.useState("");
-  const { projects, selectedWorkspace, user, logout } = useApp();
+  const {
+    projects,
+    projectsLoaded,
+    projectsWorkspaceId,
+    selectedWorkspace,
+    selectedWorkspaceId,
+    selectedProjectId,
+    selectProject,
+    user,
+    logout,
+  } = useApp();
+  const currentProjectsLoaded =
+    projectsLoaded && projectsWorkspaceId === selectedWorkspaceId;
+  const workspaceProjects =
+    currentProjectsLoaded && selectedWorkspaceId !== null
+      ? projects.filter((project) => project.workspace === selectedWorkspaceId)
+      : [];
   const projectGroup: ProjectGroup = {
     name: selectedWorkspace?.name ?? "Projects",
-    children: projects.map((project, index) => ({
+    children: workspaceProjects.map((project, index) => ({
       name: project.name,
-      href: `/projects/${project.id}`,
+      href: selectedWorkspace
+        ? workspaceProjectPath(selectedWorkspace.slug, project.id)
+        : "/",
+      id: project.id,
       color: PROJECT_COLORS[index % PROJECT_COLORS.length],
     })),
   };
@@ -341,9 +369,16 @@ export function Sidebar({ className }: { className?: string }) {
               group={group}
               pathname={pathname}
               search={search}
+              selectedProjectId={selectedProjectId}
+              selectProject={selectProject}
             />
           ))}
-          {selectedWorkspace && projects.length === 0 && (
+          {selectedWorkspace && !currentProjectsLoaded && (
+            <p className="px-3 py-2 text-xs text-muted-foreground">
+              Loading projects…
+            </p>
+          )}
+          {selectedWorkspace && currentProjectsLoaded && workspaceProjects.length === 0 && (
             <p className="px-3 py-2 text-xs text-muted-foreground">
               No projects in this workspace yet.
             </p>

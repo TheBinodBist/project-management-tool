@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { ArrowLeft } from "lucide-react";
 
 import { useApp } from "@/lib/app-context";
+import { workspaceProjectPath } from "@/lib/routes";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 
@@ -22,8 +23,11 @@ export function ProjectForm() {
     setError("");
     setSubmitting(true);
     try {
-      await createProject(name.trim(), description.trim());
-      router.replace("/");
+      if (!selectedWorkspace) throw new Error("Select a workspace first.");
+      const project = await createProject(name.trim(), description.trim());
+      router.replace(
+        workspaceProjectPath(selectedWorkspace.slug, project.id),
+      );
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "Could not create project.");
     } finally {

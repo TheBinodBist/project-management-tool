@@ -4,6 +4,7 @@ import * as React from "react";
 import { Circle, Columns3, List, Table2 } from "lucide-react";
 
 import { cn } from "@/lib/utils";
+import { useApp } from "@/lib/app-context";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { KanbanBoard } from "@/components/board/kanban-board";
 
@@ -15,17 +16,26 @@ const TABS = [
 ] as const;
 
 export function BoardView({
-  heading = "Task",
-  description = "Short description will be placed here",
+  heading,
+  description,
+  projectId,
 }: {
   heading?: string;
   description?: string;
+  projectId?: number;
 }) {
+  const { selectedProject } = useApp();
+  const activeProject = projectId === undefined ? selectedProject : undefined;
+
   return (
     <Tabs defaultValue="board" className="h-full gap-0">
       <div className="border-b bg-background px-6 pt-5">
-        <h2 className="text-2xl font-semibold">{heading}</h2>
-        <p className="mt-1 text-base text-muted-foreground">{description}</p>
+        <h2 className="text-2xl font-semibold">
+          {heading ?? activeProject?.name ?? "Task"}
+        </h2>
+        <p className="mt-1 text-base text-muted-foreground">
+          {description ?? activeProject?.description ?? "Short description will be placed here"}
+        </p>
 
         <TabsList className="mt-6 h-auto gap-6 rounded-none bg-transparent p-0">
           {TABS.map(({ value, label, icon: Icon }) => (
@@ -46,7 +56,7 @@ export function BoardView({
       </div>
 
       <TabsContent value="board" className="min-h-0 flex-1">
-        <KanbanBoard />
+        <KanbanBoard projectId={projectId ?? activeProject?.id} />
       </TabsContent>
 
       {TABS.filter((t) => t.value !== "board").map((t) => (
