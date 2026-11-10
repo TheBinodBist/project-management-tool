@@ -10,8 +10,10 @@ import {
   Search,
   Table2,
 } from "lucide-react";
+import { usePathname } from "next/navigation";
 
 import { cn } from "@/lib/utils";
+import { useApp } from "@/lib/app-context";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -45,8 +47,8 @@ interface NavbarProps {
 }
 
 export function Navbar({
-  breadcrumb = ["Projects", "Real Estate App"],
-  title = "Mobile App Projects",
+  breadcrumb,
+  title,
   heading = "Task",
   description = "Short description will be placed here",
   activeTab = "board",
@@ -54,17 +56,33 @@ export function Navbar({
   extraMembers = 11,
   className,
 }: NavbarProps) {
+  const pathname = usePathname();
+  const { projects, selectedWorkspace } = useApp();
+  const projectId = pathname.match(/^\/projects\/(\d+)$/)?.[1];
+  const activeProject = projects.find(
+    (project) => project.id === Number(projectId),
+  );
+  const activeBreadcrumb =
+    breadcrumb ??
+    (activeProject
+      ? [selectedWorkspace?.name ?? "Projects", activeProject.name]
+      : selectedWorkspace
+        ? ["Projects", selectedWorkspace.name]
+        : ["Projects"]);
+  const activeTitle =
+    title ?? activeProject?.name ?? selectedWorkspace?.name ?? "Projects";
+
   return (
     <header className={cn("bg-background", className)}>
       {/* Top bar */}
       <div className="flex items-center justify-between gap-6 border-b px-6 py-4">
         <div>
           <nav className="flex items-center gap-1.5 text-sm text-muted-foreground">
-            {breadcrumb.map((crumb, i) => (
+            {activeBreadcrumb.map((crumb, i) => (
               <React.Fragment key={crumb}>
                 {i > 0 && <ChevronRight className="size-3.5" />}
                 <span
-                  className={cn(i === breadcrumb.length - 1 && "text-foreground")}
+                  className={cn(i === activeBreadcrumb.length - 1 && "text-foreground")}
                 >
                   {crumb}
                 </span>
@@ -72,7 +90,7 @@ export function Navbar({
             ))}
           </nav>
           <h1 className="mt-1 text-3xl font-semibold tracking-tight text-primary">
-            {title}
+            {activeTitle}
           </h1>
         </div>
 

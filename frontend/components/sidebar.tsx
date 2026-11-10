@@ -17,12 +17,11 @@ import {
   Settings,
   Users,
   MoreHorizontal,
-  PanelLeftClose,
   CircleHelp,
-  Sparkles,
 } from "lucide-react";
 
 import { cn } from "@/lib/utils";
+import { useApp } from "@/lib/app-context";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -63,45 +62,16 @@ type ProjectGroup = {
 };
 
 const NAV_ITEMS: NavItem[] = [
-  { label: "Dashboard", icon: LayoutDashboard, href: "/dashboard" },
+  { label: "Dashboard", icon: LayoutDashboard, href: "/" },
   { label: "Inbox", icon: Inbox, href: "/inbox", badge: 5 },
   { label: "Team", icon: Users, href: "/team" },
 ];
 
-const PROJECT_GROUPS: ProjectGroup[] = [
-  {
-    name: "Mobile App",
-    children: [
-      {
-        name: "Finance App",
-        href: "/projects/finance-app",
-        color: "bg-blue-500",
-        badge: 2,
-      },
-      {
-        name: "Real Estate App",
-        href: "/projects/real-estate-app",
-        color: "bg-violet-500",
-        badge: 8,
-      },
-      {
-        name: "Fitness App",
-        href: "/projects/fitness-app",
-        color: "bg-emerald-500",
-        badge: 2,
-      },
-    ],
-  },
-  {
-    name: "Website Development",
-    children: [
-      {
-        name: "Company Website",
-        href: "/projects/company-website",
-        color: "bg-orange-500",
-      },
-    ],
-  },
+const PROJECT_COLORS = [
+  "bg-blue-500",
+  "bg-violet-500",
+  "bg-emerald-500",
+  "bg-orange-500",
 ];
 
 function SectionLabel({ children }: { children: React.ReactNode }) {
@@ -139,52 +109,63 @@ function SidebarLink({ item, pathname }: { item: NavItem; pathname: string }) {
           ? "bg-primary/10 text-primary hover:bg-primary/10 hover:text-primary"
           : "text-muted-foreground hover:bg-muted hover:text-foreground",
       )}
+      nativeButton={false}
+      render={<Link href={item.href} />}
     >
-      <Link href={item.href}>
-        <Icon className="size-[18px]" />
-        <span>{item.label}</span>
-        {item.badge !== undefined && <CountBadge count={item.badge} />}
-      </Link>
+      <Icon className="size-[18px]" />
+      <span>{item.label}</span>
+      {item.badge !== undefined && <CountBadge count={item.badge} />}
     </Button>
   );
 }
 
 function WorkspaceSwitcher() {
+  const { workspaces, selectedWorkspace, selectWorkspace } = useApp();
+
   return (
     <DropdownMenu>
-      <DropdownMenuTrigger>
-        <Button
-          variant="ghost"
-          className="h-auto w-full justify-between rounded-xl p-2 hover:bg-muted"
-        >
-          <div className="flex items-center gap-3 text-left">
-            <div className="flex size-10 items-center justify-center rounded-xl bg-primary text-primary-foreground">
-              <Command className="size-5" />
-            </div>
-            <div className="min-w-0">
-              <p className="truncate text-sm font-semibold">
-                Project Workspace
-              </p>
-              <p className="text-xs text-muted-foreground">Free Plan</p>
-            </div>
+      <DropdownMenuTrigger
+        render={
+          <Button
+            variant="ghost"
+            className="h-auto w-full justify-between rounded-xl p-2 hover:bg-muted"
+          />
+        }
+      >
+        <div className="flex items-center gap-3 text-left">
+          <div className="flex size-10 items-center justify-center rounded-xl bg-primary text-primary-foreground">
+            <Command className="size-5" />
           </div>
-          <ChevronsUpDown className="size-4 text-muted-foreground" />
-        </Button>
+          <div className="min-w-0">
+            <p className="truncate text-sm font-semibold">
+              {selectedWorkspace?.name ?? "Choose a workspace"}
+            </p>
+            <p className="text-xs text-muted-foreground">
+              {selectedWorkspace?.my_role ?? "Project workspace"}
+            </p>
+          </div>
+        </div>
+        <ChevronsUpDown className="size-4 text-muted-foreground" />
       </DropdownMenuTrigger>
 
       <DropdownMenuContent align="start" className="w-64">
         <DropdownMenuLabel>Switch workspace</DropdownMenuLabel>
         <DropdownMenuSeparator />
-        <DropdownMenuItem>
-          <Command className="mr-2 size-4" />
-          Project Workspace
-        </DropdownMenuItem>
-        <DropdownMenuItem>
+        {workspaces.map((workspace) => (
+          <DropdownMenuItem
+            key={workspace.id}
+            onClick={() => selectWorkspace(workspace.id)}
+          >
+            <Command className="mr-2 size-4" />
+            {workspace.name}
+          </DropdownMenuItem>
+        ))}
+        <DropdownMenuItem render={<Link href="/workspaces/new" />}>
           <Plus className="mr-2 size-4" />
           Create workspace
         </DropdownMenuItem>
         <DropdownMenuSeparator />
-        <DropdownMenuItem>
+        <DropdownMenuItem disabled>
           <Settings className="mr-2 size-4" />
           Workspace settings
         </DropdownMenuItem>
@@ -211,32 +192,31 @@ function ProjectFolder({
     project.name.toLowerCase().includes(search.toLowerCase()),
   );
 
-  const [open, setOpen] = React.useState(hasActiveProject);
-
-  React.useEffect(() => {
-    if (hasActiveProject) setOpen(true);
-  }, [hasActiveProject]);
+  const [manuallyOpen, setManuallyOpen] = React.useState(false);
+  const open = hasActiveProject || manuallyOpen;
 
   if (search && filteredProjects.length === 0) return null;
 
   const FolderIcon = open ? FolderOpen : FolderClosed;
 
   return (
-    <Collapsible open={open} onOpenChange={setOpen}>
-      <CollapsibleTrigger>
-        <Button
-          variant="ghost"
-          className="group h-9 w-full justify-start gap-2 rounded-lg px-3 text-sm font-medium text-muted-foreground hover:text-foreground"
-        >
-          <FolderIcon className="size-4" />
-          <span className="truncate">{group.name}</span>
-          <ChevronDown
-            className={cn(
-              "ml-auto size-4 transition-transform",
-              !open && "-rotate-90",
-            )}
+    <Collapsible open={open} onOpenChange={setManuallyOpen}>
+      <CollapsibleTrigger
+        render={
+          <Button
+            variant="ghost"
+            className="group h-9 w-full justify-start gap-2 rounded-lg px-3 text-sm font-medium text-muted-foreground hover:text-foreground"
           />
-        </Button>
+        }
+      >
+        <FolderIcon className="size-4" />
+        <span className="truncate">{group.name}</span>
+        <ChevronDown
+          className={cn(
+            "ml-auto size-4 transition-transform",
+            !open && "-rotate-90",
+          )}
+        />
       </CollapsibleTrigger>
 
       <CollapsibleContent>
@@ -256,21 +236,21 @@ function ProjectFolder({
                     ? "bg-primary/10 text-primary hover:bg-primary/10"
                     : "text-muted-foreground hover:text-foreground",
                 )}
+                nativeButton={false}
+                render={<Link href={project.href} />}
               >
-                <Link href={project.href}>
-                  <span
-                    className={cn(
-                      "size-2 shrink-0 rounded-full",
-                      project.color,
-                    )}
-                  />
-                  <span className="truncate">{project.name}</span>
-                  {project.badge !== undefined && (
-                    <span className="ml-auto text-xs text-muted-foreground">
-                      {project.badge}
-                    </span>
+                <span
+                  className={cn(
+                    "size-2 shrink-0 rounded-full",
+                    project.color,
                   )}
-                </Link>
+                />
+                <span className="truncate">{project.name}</span>
+                {project.badge !== undefined && (
+                  <span className="ml-auto text-xs text-muted-foreground">
+                    {project.badge}
+                  </span>
+                )}
               </Button>
             );
           })}
@@ -283,6 +263,22 @@ function ProjectFolder({
 export function Sidebar({ className }: { className?: string }) {
   const pathname = usePathname();
   const [search, setSearch] = React.useState("");
+  const { projects, selectedWorkspace, user, logout } = useApp();
+  const projectGroup: ProjectGroup = {
+    name: selectedWorkspace?.name ?? "Projects",
+    children: projects.map((project, index) => ({
+      name: project.name,
+      href: `/projects/${project.id}`,
+      color: PROJECT_COLORS[index % PROJECT_COLORS.length],
+    })),
+  };
+  const projectGroups = selectedWorkspace ? [projectGroup] : [];
+  const initials = user?.full_name
+    .split(" ")
+    .map((part) => part[0])
+    .join("")
+    .slice(0, 2)
+    .toUpperCase();
 
   return (
     <aside
@@ -331,15 +327,15 @@ export function Sidebar({ className }: { className?: string }) {
             variant="ghost"
             size="icon"
             className="size-7 text-muted-foreground"
+            nativeButton={false}
+            render={<Link href="/projects/new" aria-label="Create project" />}
           >
-            <Link href="/projects/new" aria-label="Create project">
-              <Plus className="size-4" />
-            </Link>
+            <Plus className="size-4" />
           </Button>
         </div>
 
         <div className="space-y-1">
-          {PROJECT_GROUPS.map((group) => (
+          {projectGroups.map((group) => (
             <ProjectFolder
               key={group.name}
               group={group}
@@ -347,22 +343,27 @@ export function Sidebar({ className }: { className?: string }) {
               search={search}
             />
           ))}
+          {selectedWorkspace && projects.length === 0 && (
+            <p className="px-3 py-2 text-xs text-muted-foreground">
+              No projects in this workspace yet.
+            </p>
+          )}
         </div>
 
         {/* Create project */}
         <Button
           variant="outline"
           className="mt-4 h-9 w-full justify-start gap-2 rounded-lg border-dashed text-sm text-muted-foreground"
+          nativeButton={false}
+          render={<Link href="/projects/new" />}
         >
-          <Link href="/projects/new">
-            <Plus className="size-4" />
-            Create new project
-          </Link>
+          <Plus className="size-4" />
+          Create new project
         </Button>
 
         {search && (
           <p className="px-3 py-4 text-center text-xs text-muted-foreground">
-            Search results for "{search}"
+            Search results for &quot;{search}&quot;
           </p>
         )}
       </ScrollArea>
@@ -374,21 +375,21 @@ export function Sidebar({ className }: { className?: string }) {
         <Button
           variant="ghost"
           className="h-9 w-full justify-start gap-3 rounded-lg px-3 text-sm text-muted-foreground"
+          nativeButton={false}
+          render={<Link href="/settings" />}
         >
-          <Link href="/settings">
-            <Settings className="size-4" />
-            Settings
-          </Link>
+          <Settings className="size-4" />
+          Settings
         </Button>
 
         <Button
           variant="ghost"
           className="h-9 w-full justify-start gap-3 rounded-lg px-3 text-sm text-muted-foreground"
+          nativeButton={false}
+          render={<Link href="/help" />}
         >
-          <Link href="/help">
-            <CircleHelp className="size-4" />
-            Help & Support
-          </Link>
+          <CircleHelp className="size-4" />
+          Help & Support
         </Button>
       </div>
 
@@ -396,46 +397,47 @@ export function Sidebar({ className }: { className?: string }) {
 
       {/* User profile */}
       <DropdownMenu>
-        <DropdownMenuTrigger>
-          <Button
-            variant="ghost"
-            className="h-auto w-full justify-start gap-3 rounded-none px-4 py-4"
-          >
-            <Avatar className="size-9">
-              <AvatarImage src="/avatars/michael.png" />
-              <AvatarFallback>MS</AvatarFallback>
-            </Avatar>
+        <DropdownMenuTrigger
+          render={
+            <Button
+              variant="ghost"
+              className="h-auto w-full justify-start gap-3 rounded-none px-4 py-4"
+            />
+          }
+        >
+          <Avatar className="size-9">
+            <AvatarImage src={user?.avatar_url || undefined} />
+            <AvatarFallback>{initials || "U"}</AvatarFallback>
+          </Avatar>
 
-            <div className="min-w-0 flex-1 text-left">
-              <p className="truncate text-sm font-semibold">Michael Smith</p>
-              <p className="truncate text-xs text-muted-foreground">
-                michaelsmith12@gmail.com
-              </p>
-            </div>
+          <div className="min-w-0 flex-1 text-left">
+            <p className="truncate text-sm font-semibold">{user?.full_name}</p>
+            <p className="truncate text-xs text-muted-foreground">
+              {user?.email}
+            </p>
+          </div>
 
-            <MoreHorizontal className="size-4 text-muted-foreground" />
-          </Button>
+          <MoreHorizontal className="size-4 text-muted-foreground" />
         </DropdownMenuTrigger>
 
         <DropdownMenuContent align="end" side="top" className="w-56">
           <DropdownMenuLabel>My Account</DropdownMenuLabel>
           <DropdownMenuSeparator />
-          <DropdownMenuItem>
-            <Link href="/profile">
-              <Users className="mr-2 size-4" />
-              Profile
-            </Link>
+          <DropdownMenuItem render={<Link href="/profile" />}>
+            <Users className="mr-2 size-4" />
+            Profile
           </DropdownMenuItem>
-          <DropdownMenuItem>
-            <Link href="/settings">
-              <Settings className="mr-2 size-4" />
-              Settings
-            </Link>
+          <DropdownMenuItem render={<Link href="/settings" />}>
+            <Settings className="mr-2 size-4" />
+            Settings
           </DropdownMenuItem>
           <DropdownMenuSeparator />
-          <DropdownMenuItem className="text-destructive focus:text-destructive">
+          <DropdownMenuItem
+            className="text-destructive focus:text-destructive"
+            onClick={logout}
+          >
             <LogOut className="mr-2 size-4" />
-            Logout
+            Sign out
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
