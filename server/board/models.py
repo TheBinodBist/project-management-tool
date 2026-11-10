@@ -40,5 +40,29 @@ class TimeStamped(models.Model):
         abstract = True
 
 
+class Workspace(TimeStamped):
+    name = models.CharField(max_length=120)
+    slug=models.SlugField(max_length=180,unique=True,blank=True)
+    description= models.TextField(blank=True)
+
+    class Meta:
+        ordering= ["name"]
+
+    def __str__(self):
+        return self.name
+
+    def save(self,*args,**kwargs):
+        if not self.slug:
+            base = slugify(self.name)[:120] or "workspace"
+            slug ,n = base,2
+            while Workspace.objects.filter(slug=slug).exists():
+                slug= f"{base}-{n}"
+                n+=1
+
+            self.slug = slug
+            super().save(*args,**kwargs)
+
+            def get_worksapce(self):
+                return self
 
 
