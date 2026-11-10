@@ -12,7 +12,7 @@ class Role(models.TextChoices):
 class Priority(models.TextChoices):
     LOW= "low","Low"
     MEDIUM = "medium","Medium"
-    HIGN="hign","High"
+    HIGH="high","High"
     URGENT = "urgent","Urgent"
 
 
@@ -60,17 +60,15 @@ class Workspace(TimeStamped):
                 n+=1
 
             self.slug = slug
-            super().save(*args,**kwargs)
+        super().save(*args,**kwargs)
 
-            def get_worksapce(self):
-                return self
-
-
+    def get_workspace(self):
+        return self
 
 
 
 class WorkspaceMember(models.Model):
-    workspace = models.ForeignKey(Workspace,on_delete=models.CASCADE, related_name="member")
+    workspace = models.ForeignKey(Workspace,on_delete=models.CASCADE, related_name="members")
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="workspace_memberships")
     role = models.CharField(max_length=100,choices=Role.choices, default=Role.MEMBER)
     joined_date = models.DateTimeField(auto_now_add=True)
@@ -91,7 +89,7 @@ class WorkspaceMember(models.Model):
 class Project(TimeStamped):
     workspace= models.ForeignKey(Workspace, on_delete=models.CASCADE, related_name="projects")
     name = models.TextField()
-    description = models.BooleanField(blank=True)
+    description = models.TextField(blank=True)
     is_archived = models.BooleanField(default=False)
     created_by = models.ForeignKey(
         settings.AUTH_USER_MODEL,
@@ -111,7 +109,7 @@ class Project(TimeStamped):
         return self.workspace
 
 class Board(TimeStamped):
-    project = models.ForeignKey(Project,on_delete=models.CASCADE, related_name="board")
+    project = models.ForeignKey(Project,on_delete=models.CASCADE, related_name="boards")
     name = models.CharField(max_length=120)
     position = models.PositiveIntegerField(default=0)
 

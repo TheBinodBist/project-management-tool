@@ -77,6 +77,7 @@ class WorkspaceSerializer(serializers.ModelSerializer):
 
 class WorkspaceMemberSerializer(serializers.ModelSerializer):
     user = UserMiniSerializer(read_only=True)
+    joined_at = serializers.DateTimeField(source="joined_date", read_only=True)
 
     class Meta:
         model = WorkspaceMember

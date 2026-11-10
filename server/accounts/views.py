@@ -41,16 +41,19 @@ class LoginView(TokenObtainPairView):
 
 class MeView(generics.RetrieveUpdateAPIView):
     serializer_class = UserSerializer
+    permission_classes = [permissions.IsAuthenticated]
 
     def get_object(self):
         return self.request.user
 
 
 class ChangePasswordView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
     def post(self,request):
         serializer = ChangePasswordSerializer(data=request.data, context={"request": request})
         serializer.is_valid(raise_exception=True)
-        request.user.set_password(serializer.validate_data["new_password"])
+        request.user.set_password(serializer.validated_data["new_password"])
         request.user.save(update_fields=["password"])
 
         return Response(status = status.HTTP_204_NO_CONTENT)
