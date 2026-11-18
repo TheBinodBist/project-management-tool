@@ -598,8 +598,6 @@ def task_detail(request, pk):
     if request.method == "GET":
         return Response(TaskSerializer(task, context={"request": request}).data)
 
-    require_role(request.user, task.get_workspace(), ADMIN)
-
     if request.method in ["PUT", "PATCH"]:
         serializer = TaskSerializer(
             task,
@@ -611,6 +609,7 @@ def task_detail(request, pk):
         task = serializer.save()
         return Response(TaskSerializer(task, context={"request": request}).data)
 
+    require_role(request.user, task.get_workspace(), ADMIN)
     task.delete()
     return Response(status=status.HTTP_204_NO_CONTENT)
 

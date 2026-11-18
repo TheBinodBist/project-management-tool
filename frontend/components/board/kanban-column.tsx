@@ -14,8 +14,8 @@ interface KanbanColumnProps {
   title: string;
   dot: string;
   tasks: Task[];
-  canAddCard?: boolean;
   onAddCard: (columnId: ColumnId) => void;
+  onEditCard: (task: Task) => void;
 }
 
 export function KanbanColumn({
@@ -23,8 +23,8 @@ export function KanbanColumn({
   title,
   dot,
   tasks,
-  canAddCard = true,
   onAddCard,
+  onEditCard,
 }: KanbanColumnProps) {
   const { setNodeRef, isOver } = useDroppable({ id, data: { type: "column" } });
 
@@ -60,7 +60,12 @@ export function KanbanColumn({
           strategy={verticalListSortingStrategy}
         >
           {tasks.map((task) => (
-            <SortableTaskCard key={task.id} task={task} columnId={id} />
+            <SortableTaskCard
+              key={task.id}
+              task={task}
+              columnId={id}
+              onEdit={() => onEditCard(task)}
+            />
           ))}
         </SortableContext>
       </div>
@@ -68,7 +73,6 @@ export function KanbanColumn({
       <div className="border-t bg-background/60 p-3">
         <Button
           variant="outline"
-          disabled={!canAddCard}
           onClick={() => onAddCard(id)}
           className="h-10 w-full border-dashed text-muted-foreground"
         >

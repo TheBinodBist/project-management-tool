@@ -25,8 +25,25 @@ import {
 } from "@/components/board/board-data";
 import { KanbanColumn } from "@/components/board/kanban-column";
 import { TaskCard } from "@/components/board/task-card";
+import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { useApp } from "@/lib/app-context";
-import { apiRequest, type ApiTask, type Board, type BoardColumn } from "@/lib/api";
+import {
+  apiRequest,
+  type ApiTask,
+  type Board,
+  type BoardColumn,
+  type Project,
+} from "@/lib/api";
 
 type Columns = Record<ColumnId, Task[]>;
 type BoardTargets = Record<number, Partial<Record<ColumnId, number>>>;
@@ -39,6 +56,13 @@ const PRIORITIES: Record<ApiTask["priority"], Priority> = {
   high: "High",
   urgent: "Urgent",
 };
+const API_PRIORITIES: Record<Priority, ApiTask["priority"]> = {
+  Low: "low",
+  Medium: "medium",
+  High: "high",
+  Urgent: "urgent",
+};
+const PRIORITY_OPTIONS: Priority[] = ["Low", "Medium", "High", "Urgent"];
 
 function getColumnId(column: BoardColumn, index: number): ColumnId {
   const name = column.name.toLowerCase().replace(/[\s_-]+/g, "");
@@ -80,6 +104,68 @@ function mapTask(task: ApiTask, boardId: number): Task {
   };
 }
 
+async function ensureProjectColumns(
+  project: Project,
+): Promise<{ boardId: number; columns: Record<ColumnId, number> }> {
+  let boards = await apiRequest<Board[]>(`/boards/?project=${project.id}`);
+  if (boards.length === 0) {
+    const board = await apiRequest<Board>("/boards/", {
+      method: "POST",
+      body: JSON.stringify({
+        project: project.id,
+        name: project.name,
+        create_default_columns: true,
+      }),
+    });
+    boards = [board];
+  }
+
+  const firstBoard = boards[0];
+  if (!firstBoard) {
+    throw new Error("Could not create or find a board for this project.");
+  }
+  const board = await apiRequest<Board>(`/boards/${firstBoard.id}/`);
+  const columns: Partial<Record<ColumnId, number>> = {};
+  for (const [index, column] of (board.columns ?? []).entries()) {
+    const columnId = getColumnId(column, index);
+    columns[columnId] ??= column.id;
+  }
+
+  const defaultColumnNames: Record<ColumnId, string> = {
+    todo: "To Do",
+    "in-progress": "In Progress",
+    done: "Done",
+  };
+  for (const { id } of COLUMNS) {
+    if (columns[id] !== undefined) continue;
+    const column = await apiRequest<BoardColumn>("/columns/", {
+      method: "POST",
+      body: JSON.stringify({
+        board: board.id,
+        name: defaultColumnNames[id],
+      }),
+    });
+    columns[id] = column.id;
+  }
+
+  if (
+    columns.todo === undefined ||
+    columns["in-progress"] === undefined ||
+    columns.done === undefined
+  ) {
+    throw new Error("Could not create the required project board columns.");
+  }
+
+  return {
+    boardId: board.id,
+    columns: {
+      todo: columns.todo,
+      "in-progress": columns["in-progress"],
+      done: columns.done,
+    },
+  };
+}
+
 export function KanbanBoard({ projectId }: { projectId?: number }) {
   const {
     projects,
@@ -90,6 +176,15 @@ export function KanbanBoard({ projectId }: { projectId?: number }) {
   const [columns, setColumns] = React.useState<Columns>(EMPTY_COLUMNS);
   const [targets, setTargets] = React.useState<BoardTargets>({});
   const [activeTask, setActiveTask] = React.useState<Task | null>(null);
+  const [editingTask, setEditingTask] = React.useState<Task | null>(null);
+  const [editDraft, setEditDraft] = React.useState<{
+    title: string;
+    description: string;
+    priority: Priority;
+    dueDate: string;
+  } | null>(null);
+  const [savingTask, setSavingTask] = React.useState(false);
+  const [editError, setEditError] = React.useState<string | null>(null);
   const [loading, setLoading] = React.useState(true);
   const [error, setError] = React.useState<string | null>(null);
   const [reloadKey, setReloadKey] = React.useState(0);
@@ -281,16 +376,29 @@ export function KanbanBoard({ projectId }: { projectId?: number }) {
     const target = Object.entries(targets).find(
       ([, boardTargets]) => boardTargets[columnId] !== undefined,
     );
-    if (!target) {
-      setError("Create a project board before adding a card.");
-      return;
-    }
-
-    const [boardId, boardTargets] = target;
-    const column = boardTargets[columnId];
-    if (!column) return;
-
     try {
+      let boardId: number;
+      let column = target?.[1][columnId];
+      if (target && column !== undefined) {
+        boardId = Number(target[0]);
+      } else {
+        const project = projects.find((item) => item.id === activeProjectId);
+        if (!project) {
+          throw new Error("Select a project before adding a card.");
+        }
+        const ensured = await ensureProjectColumns(project);
+        boardId = ensured.boardId;
+        column = ensured.columns[columnId];
+        setTargets((previous) => ({
+          ...previous,
+          [ensured.boardId]: ensured.columns,
+        }));
+      }
+
+      if (column === undefined) {
+        throw new Error("Could not find a board column for this card.");
+      }
+
       const created = await apiRequest<ApiTask>("/tasks/", {
         method: "POST",
         body: JSON.stringify({
@@ -302,10 +410,60 @@ export function KanbanBoard({ projectId }: { projectId?: number }) {
       });
       setColumns((previous) => ({
         ...previous,
-        [columnId]: [...previous[columnId], mapTask(created, Number(boardId))],
+        [columnId]: [...previous[columnId], mapTask(created, boardId)],
       }));
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "Could not create task.");
+    }
+  }
+
+  function editCard(task: Task) {
+    setEditingTask(task);
+    setEditDraft({
+      title: task.title,
+      description: task.description,
+      priority: task.priority,
+      dueDate: task.dueDate ?? "",
+    });
+    setEditError(null);
+  }
+
+  async function saveTask(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!editingTask || !editDraft) return;
+
+    setSavingTask(true);
+    setEditError(null);
+    try {
+      const saved = await apiRequest<ApiTask>(`/tasks/${editingTask.id}/`, {
+        method: "PATCH",
+        body: JSON.stringify({
+          title: editDraft.title.trim(),
+          description: editDraft.description.trim(),
+          priority: API_PRIORITIES[editDraft.priority],
+          due_date: editDraft.dueDate || null,
+        }),
+      });
+      const updatedTask = mapTask(saved, editingTask.boardId);
+      setColumns((previous) => ({
+        todo: previous.todo.map((task) =>
+          task.id === updatedTask.id ? updatedTask : task,
+        ),
+        "in-progress": previous["in-progress"].map((task) =>
+          task.id === updatedTask.id ? updatedTask : task,
+        ),
+        done: previous.done.map((task) =>
+          task.id === updatedTask.id ? updatedTask : task,
+        ),
+      }));
+      setEditingTask(null);
+      setEditDraft(null);
+    } catch (reason) {
+      setEditError(
+        reason instanceof Error ? reason.message : "Could not save task.",
+      );
+    } finally {
+      setSavingTask(false);
     }
   }
 
@@ -322,7 +480,7 @@ export function KanbanBoard({ projectId }: { projectId?: number }) {
       )}
       {!loading && !error && !hasBoard && (
         <p className="border-b px-6 py-2 text-sm text-muted-foreground">
-          No boards are available in this workspace yet.
+          No board is available for this project yet. Add a card to create one.
         </p>
       )}
       {loading ? (
@@ -348,10 +506,8 @@ export function KanbanBoard({ projectId }: { projectId?: number }) {
                 title={column.title}
                 dot={column.dot}
                 tasks={columns[column.id]}
-                canAddCard={Object.values(targets).some(
-                  (boardTargets) => boardTargets[column.id] !== undefined,
-                )}
                 onAddCard={(id) => void addCard(id)}
+                onEditCard={editCard}
               />
             ))}
           </div>
@@ -362,6 +518,106 @@ export function KanbanBoard({ projectId }: { projectId?: number }) {
           </DragOverlay>
         </DndContext>
       )}
+      <Dialog
+        open={editingTask !== null}
+        onOpenChange={(open) => {
+          if (!open && !savingTask) {
+            setEditingTask(null);
+            setEditDraft(null);
+          }
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Edit task</DialogTitle>
+            <DialogDescription>
+              Update the task details. Changes are saved to the project board.
+            </DialogDescription>
+          </DialogHeader>
+          {editDraft && (
+            <form className="space-y-4" onSubmit={(event) => void saveTask(event)}>
+              <label className="block space-y-2 text-sm font-medium">
+                Title
+                <Input
+                  required
+                  maxLength={255}
+                  autoFocus
+                  value={editDraft.title}
+                  onChange={(event) =>
+                    setEditDraft({ ...editDraft, title: event.target.value })
+                  }
+                />
+              </label>
+              <label className="block space-y-2 text-sm font-medium">
+                Description
+                <Textarea
+                  rows={4}
+                  value={editDraft.description}
+                  onChange={(event) =>
+                    setEditDraft({
+                      ...editDraft,
+                      description: event.target.value,
+                    })
+                  }
+                />
+              </label>
+              <label className="block space-y-2 text-sm font-medium">
+                Priority
+                <select
+                  className="h-9 w-full rounded-lg border border-input bg-background px-3 text-sm"
+                  value={editDraft.priority}
+                  onChange={(event) => {
+                    const priority = PRIORITY_OPTIONS.find(
+                      (option) => option === event.target.value,
+                    );
+                    if (priority) setEditDraft({ ...editDraft, priority });
+                  }}
+                >
+                  {PRIORITY_OPTIONS.map((priority) => (
+                    <option key={priority} value={priority}>
+                      {priority}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="block space-y-2 text-sm font-medium">
+                Due date
+                <Input
+                  type="date"
+                  value={editDraft.dueDate}
+                  onChange={(event) =>
+                    setEditDraft({ ...editDraft, dueDate: event.target.value })
+                  }
+                />
+              </label>
+              {editError && (
+                <p role="alert" className="text-sm text-destructive">
+                  {editError}
+                </p>
+              )}
+              <DialogFooter>
+                <Button
+                  type="button"
+                  variant="outline"
+                  disabled={savingTask}
+                  onClick={() => {
+                    setEditingTask(null);
+                    setEditDraft(null);
+                  }}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  type="submit"
+                  disabled={savingTask || !editDraft.title.trim()}
+                >
+                  {savingTask ? "Saving…" : "Save changes"}
+                </Button>
+              </DialogFooter>
+            </form>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

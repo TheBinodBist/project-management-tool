@@ -3,7 +3,7 @@
 import * as React from "react";
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { Flag, MessageCircle, MoreHorizontal, Tags } from "lucide-react";
+import { Flag, MessageCircle, Pencil, Tags } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -21,10 +21,11 @@ interface TaskCardProps extends React.HTMLAttributes<HTMLDivElement> {
   task: Task;
   isDragging?: boolean;
   overlay?: boolean;
+  onEdit?: () => void;
 }
 
 export const TaskCard = React.forwardRef<HTMLDivElement, TaskCardProps>(
-  ({ task, isDragging, overlay, className, ...props }, ref) => {
+  ({ task, isDragging, overlay, onEdit, className, ...props }, ref) => {
     const label = task.labels[0];
     const dueDate = task.dueDate
       ? new Date(`${task.dueDate}T00:00:00`).toLocaleDateString("en-US", {
@@ -66,10 +67,15 @@ export const TaskCard = React.forwardRef<HTMLDivElement, TaskCardProps>(
           <Button
             variant="ghost"
             size="icon"
-            aria-label="Task options"
+            aria-label={`Edit ${task.title}`}
             className="-mr-2 -mt-1 size-8 text-muted-foreground"
+            onPointerDown={(event) => event.stopPropagation()}
+            onClick={(event) => {
+              event.stopPropagation();
+              onEdit?.();
+            }}
           >
-            <MoreHorizontal className="size-4" />
+            <Pencil className="size-4" />
           </Button>
         </div>
 
@@ -131,9 +137,11 @@ TaskCard.displayName = "TaskCard";
 export function SortableTaskCard({
   task,
   columnId,
+  onEdit,
 }: {
   task: Task;
   columnId: ColumnId;
+  onEdit?: () => void;
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
     useSortable({ id: task.id, data: { type: "task", columnId } });
@@ -144,6 +152,7 @@ export function SortableTaskCard({
       style={{ transform: CSS.Transform.toString(transform), transition }}
       task={task}
       isDragging={isDragging}
+      onEdit={onEdit}
       {...attributes}
       {...listeners}
     />
