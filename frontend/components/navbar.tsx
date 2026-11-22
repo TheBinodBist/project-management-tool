@@ -53,9 +53,13 @@ export function Navbar({
   const activeProject = projects.find(
     (project) => project.id === Number(projectId),
   );
+  const isProfilePage = pathname === "/profile";
+  const isSettingsPage = pathname === "/settings";
   const activeBreadcrumb =
     breadcrumb ??
-    (activeProject
+    (isProfilePage || isSettingsPage
+      ? ["My Account", isProfilePage ? "Profile" : "Settings"]
+      : activeProject
       ? [selectedWorkspace?.name ?? "Projects", activeProject.name]
       : selectedProject
         ? [selectedWorkspace?.name ?? "Projects", selectedProject.name]
@@ -64,10 +68,14 @@ export function Navbar({
         : ["Projects"]);
   const activeTitle =
     title ??
-    activeProject?.name ??
-    selectedProject?.name ??
-    selectedWorkspace?.name ??
-    "Projects";
+    (isProfilePage || isSettingsPage
+      ? isProfilePage
+        ? "Profile"
+        : "Settings"
+      : activeProject?.name ??
+        selectedProject?.name ??
+        selectedWorkspace?.name ??
+        "Projects");
 
   React.useEffect(() => {
     let active = true;

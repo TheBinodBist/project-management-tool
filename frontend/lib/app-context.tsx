@@ -36,6 +36,7 @@ type AppContextValue = {
   login: (email: string, password: string, invitationToken?: string) => Promise<void>;
   register: (email: string, name: string, password: string, invitationToken?: string) => Promise<void>;
   acceptInvitation: (token: string) => Promise<void>;
+  updateProfile: (profile: Pick<ApiUser, "full_name" | "avatar_url">) => Promise<void>;
   logout: () => void;
   createWorkspace: (name: string, description: string) => Promise<Workspace>;
   createProject: (name: string, description: string) => Promise<Project>;
@@ -280,6 +281,17 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     [loadWorkspaces, router],
   );
 
+  const updateProfile = React.useCallback(
+    async (profile: Pick<ApiUser, "full_name" | "avatar_url">) => {
+      const updatedUser = await apiRequest<ApiUser>("/auth/me/", {
+        method: "PATCH",
+        body: JSON.stringify(profile),
+      });
+      setUser(updatedUser);
+    },
+    [],
+  );
+
   const logout = React.useCallback(() => {
     clearTokens();
     setUser(null);
@@ -429,6 +441,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       login,
       register,
       acceptInvitation,
+      updateProfile,
       logout,
       createWorkspace,
       createProject,
@@ -454,6 +467,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       login,
       register,
       acceptInvitation,
+      updateProfile,
       logout,
       createWorkspace,
       createProject,

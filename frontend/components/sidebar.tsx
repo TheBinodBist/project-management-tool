@@ -37,6 +37,7 @@ import { Separator } from "@/components/ui/separator";
 import {
   DropdownMenu,
   DropdownMenuContent,
+  DropdownMenuGroup,
   DropdownMenuItem,
   DropdownMenuLabel,
   DropdownMenuSeparator,
@@ -122,22 +123,31 @@ function SidebarLink({ item, pathname }: { item: NavItem; pathname: string }) {
 }
 
 function WorkspaceSwitcher() {
-  const { workspaces, selectedWorkspace, selectWorkspace } = useApp();
+  const {
+    workspaces,
+    selectedWorkspace,
+    selectedProject,
+    selectWorkspace,
+  } = useApp();
+  const dashboardHref =
+    selectedWorkspace && selectedProject
+      ? workspaceProjectPath(selectedWorkspace.slug, selectedProject.id)
+      : "/";
 
   return (
     <DropdownMenu>
-      <DropdownMenuTrigger
-        render={
-          <Button
-            variant="ghost"
-            className="h-auto w-full justify-between rounded-xl p-2 hover:bg-muted"
-          />
-        }
-      >
-        <div className="flex items-center gap-3 text-left">
-          <div className="flex size-10 items-center justify-center rounded-xl bg-primary text-primary-foreground">
-            <Command className="size-5" />
-          </div>
+      <div className="flex items-center gap-2">
+        <Button
+          variant="ghost"
+          className="size-10 rounded-xl bg-primary p-0 text-primary-foreground hover:bg-primary/80 hover:text-primary-foreground"
+          nativeButton={false}
+          render={<Link href={dashboardHref} aria-label="Go to dashboard" />}
+        >
+          <Command className="size-5" />
+        </Button>
+        <DropdownMenuTrigger
+          className="flex h-auto min-w-0 flex-1 items-center justify-between rounded-xl p-2 text-left hover:bg-muted"
+        >
           <div className="min-w-0">
             <p className="truncate text-sm font-semibold">
               {selectedWorkspace?.name ?? "Choose a workspace"}
@@ -146,22 +156,24 @@ function WorkspaceSwitcher() {
               {selectedWorkspace?.my_role ?? "Project workspace"}
             </p>
           </div>
-        </div>
-        <ChevronsUpDown className="size-4 text-muted-foreground" />
-      </DropdownMenuTrigger>
+          <ChevronsUpDown className="size-4 shrink-0 text-muted-foreground" />
+        </DropdownMenuTrigger>
+      </div>
 
       <DropdownMenuContent align="start" className="w-64">
-        <DropdownMenuLabel>Switch workspace</DropdownMenuLabel>
+        <DropdownMenuGroup>
+          <DropdownMenuLabel>Switch workspace</DropdownMenuLabel>
+          {workspaces.map((workspace) => (
+            <DropdownMenuItem
+              key={workspace.id}
+              onClick={() => selectWorkspace(workspace.id)}
+            >
+              <Command className="mr-2 size-4" />
+              {workspace.name}
+            </DropdownMenuItem>
+          ))}
+        </DropdownMenuGroup>
         <DropdownMenuSeparator />
-        {workspaces.map((workspace) => (
-          <DropdownMenuItem
-            key={workspace.id}
-            onClick={() => selectWorkspace(workspace.id)}
-          >
-            <Command className="mr-2 size-4" />
-            {workspace.name}
-          </DropdownMenuItem>
-        ))}
         <DropdownMenuItem render={<Link href="/workspaces/new" />}>
           <Plus className="mr-2 size-4" />
           Create workspace
@@ -456,16 +468,17 @@ export function Sidebar({ className }: { className?: string }) {
         </DropdownMenuTrigger>
 
         <DropdownMenuContent align="end" side="top" className="w-56">
-          <DropdownMenuLabel>My Account</DropdownMenuLabel>
-          <DropdownMenuSeparator />
-          <DropdownMenuItem render={<Link href="/profile" />}>
-            <Users className="mr-2 size-4" />
-            Profile
-          </DropdownMenuItem>
-          <DropdownMenuItem render={<Link href="/settings" />}>
-            <Settings className="mr-2 size-4" />
-            Settings
-          </DropdownMenuItem>
+          <DropdownMenuGroup>
+            <DropdownMenuLabel>My Account</DropdownMenuLabel>
+            <DropdownMenuItem render={<Link href="/profile" />}>
+              <Users className="mr-2 size-4" />
+              Profile
+            </DropdownMenuItem>
+            <DropdownMenuItem render={<Link href="/settings" />}>
+              <Settings className="mr-2 size-4" />
+              Settings
+            </DropdownMenuItem>
+          </DropdownMenuGroup>
           <DropdownMenuSeparator />
           <DropdownMenuItem
             className="text-destructive focus:text-destructive"
