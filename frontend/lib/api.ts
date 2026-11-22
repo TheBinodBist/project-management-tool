@@ -1,37 +1,8 @@
+
 const API_BASE = "/api/v1";
 
 function getApiUrl(path: string) {
-  if (!API_BASE) {
-    throw new Error(
-      "The API URL is not configured. Set NEXT_PUBLIC_API_URL to your HTTPS backend URL ending in /api/v1, then redeploy the frontend.",
-    );
-  }
-
-  let baseUrl: URL;
-  try {
-    baseUrl = new URL(API_BASE);
-  } catch {
-    throw new Error(
-      "NEXT_PUBLIC_API_URL must be a valid absolute HTTPS backend URL ending in /api/v1.",
-    );
-  }
-
-  const isLocalHttp =
-    baseUrl.protocol === "http:" &&
-    ["localhost", "127.0.0.1", "[::1]"].includes(baseUrl.hostname);
-  const apiPath = baseUrl.pathname.replace(/\/+$/, "");
-  if (
-    (baseUrl.protocol !== "https:" && !isLocalHttp) ||
-    baseUrl.hostname === "undefined" ||
-    /(^|\/)undefined(\/|$)/i.test(apiPath) ||
-    !apiPath.endsWith("/api/v1")
-  ) {
-    throw new Error(
-      "NEXT_PUBLIC_API_URL must be a valid HTTPS backend URL ending in /api/v1.",
-    );
-  }
-
-  return `${baseUrl.href.replace(/\/$/, "")}${path}`;
+  return `${API_BASE}${path}`;
 }
 
 const ACCESS_TOKEN_KEY = "project-workspace.access";
@@ -114,7 +85,11 @@ export type ApiTask = {
   due_date: string | null;
   position: number;
   assignees: ApiUser[];
-  labels: { id: number; name: string; color: string }[];
+  labels: {
+    id: number;
+    name: string;
+    color: string;
+  }[];
   comment_count: number;
 };
 
@@ -124,16 +99,25 @@ type TokenPair = {
   user: ApiUser;
 };
 
+
+
 function getStoredToken(key: string) {
-  return typeof window === "undefined" ? null : window.localStorage.getItem(key);
+  if (typeof window === "undefined") return null;
+  return window.localStorage.getItem(key);
 }
 
-export function saveTokens(tokens: Pick<TokenPair, "access" | "refresh">) {
+export function saveTokens(
+  tokens: Pick<TokenPair, "access" | "refresh">
+) {
+  if (typeof window === "undefined") return;
+
   window.localStorage.setItem(ACCESS_TOKEN_KEY, tokens.access);
   window.localStorage.setItem(REFRESH_TOKEN_KEY, tokens.refresh);
 }
 
 export function clearTokens() {
+  if (typeof window === "undefined") return;
+
   window.localStorage.removeItem(ACCESS_TOKEN_KEY);
   window.localStorage.removeItem(REFRESH_TOKEN_KEY);
 }
@@ -142,13 +126,18 @@ export function getAccessToken() {
   return getStoredToken(ACCESS_TOKEN_KEY);
 }
 
+
+
 async function refreshAccessToken() {
   const refresh = getStoredToken(REFRESH_TOKEN_KEY);
+
   if (!refresh) return null;
 
   const response = await fetch(getApiUrl("/auth/refresh/"), {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: {
+      "Content-Type": "application/json",
+    },
     body: JSON.stringify({ refresh }),
   });
 
@@ -157,10 +146,20 @@ async function refreshAccessToken() {
     return null;
   }
 
-  const tokens = (await response.json()) as { access: string; refresh?: string };
-  saveTokens({ access: tokens.access, refresh: tokens.refresh ?? refresh });
+  const tokens = (await response.json()) as {
+    access: string;
+    refresh?: string;
+  };
+
+  saveTokens({
+    access: tokens.access,
+    refresh: tokens.refresh ?? refresh,
+  });
+
   return tokens.access;
 }
+
+
 
 export class ApiError extends Error {
   status: number;
@@ -174,32 +173,48 @@ export class ApiError extends Error {
 
 function getErrorMessage(body: unknown) {
   if (typeof body === "string") return body;
+
   if (body && typeof body === "object") {
     const errors = Object.values(body as Record<string, unknown>)
       .flatMap((value) => (Array.isArray(value) ? value : [value]))
       .filter((value): value is string => typeof value === "string");
+
     if (errors.length) return errors.join(" ");
   }
+
   return "The request failed. Please try again.";
 }
 
+
+
 export async function apiRequest<T>(
   path: string,
-  init: RequestInit = {},
+  init: RequestInit = {}
 ): Promise<T> {
   const headers = new Headers(init.headers);
+
   if (init.body && !headers.has("Content-Type")) {
     headers.set("Content-Type", "application/json");
   }
 
   const access = getAccessToken();
-  if (access) headers.set("Authorization", `Bearer ${access}`);
 
-  const request = () => fetch(getApiUrl(path), { ...init, headers });
+  if (access) {
+    headers.set("Authorization", `Bearer ${access}`);
+  }
+
+  const request = () =>
+    fetch(getApiUrl(path), {
+      ...init,
+      headers,
+    });
+
   let response = await request();
 
+  // Refresh token when access token expires
   if (response.status === 401 && access) {
     const refreshed = await refreshAccessToken();
+
     if (refreshed) {
       headers.set("Authorization", `Bearer ${refreshed}`);
       response = await request();
@@ -208,40 +223,60 @@ export async function apiRequest<T>(
 
   if (!response.ok) {
     const body = await response.json().catch(() => null);
-    throw new ApiError(getErrorMessage(body), response.status);
+
+    throw new ApiError(
+      getErrorMessage(body),
+      response.status
+    );
   }
 
-  if (response.status === 204) return undefined as T;
+  if (response.status === 204) {
+    return undefined as T;
+  }
+
   return (await response.json()) as T;
 }
 
-export function loginRequest(email: string, password: string) {
+
+
+export function loginRequest(
+  email: string,
+  password: string
+) {
   return apiRequest<TokenPair>("/auth/login/", {
     method: "POST",
-    body: JSON.stringify({ email, password }),
+    body: JSON.stringify({
+      email,
+      password,
+    }),
   });
 }
 
 export function registerRequest(
   email: string,
   full_name: string,
-  password: string,
+  password: string
 ) {
   return apiRequest<TokenPair>("/auth/register/", {
     method: "POST",
-    body: JSON.stringify({ email, full_name, password }),
+    body: JSON.stringify({
+      email,
+      full_name,
+      password,
+    }),
   });
 }
 
+
 export function inviteWorkspaceMember(
   workspaceId: number,
-  email: string,
+  email: string
 ) {
   return apiRequest<SentWorkspaceInvitation>(
     `/workspaces/${workspaceId}/members/`,
     {
       method: "POST",
       body: JSON.stringify({ email }),
-    },
+    }
   );
 }
