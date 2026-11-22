@@ -1,11 +1,11 @@
 
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
-  "trailingSlash": true,
+  "trailingSlash": false,
   "rewrites": [
     {
-      "source": "/api/v1/:path*",
-      "destination": "http://3.107.154.36:8000/api/v1/:path*"
+      "source": "/api/v1/(.*)",
+      "destination": "http://3.107.154.36:8000/api/v1/$1"
     },
     {
       "source": "/(.*)",
