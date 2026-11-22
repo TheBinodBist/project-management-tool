@@ -1,4 +1,4 @@
-const API_BASE = process.env.NEXT_PUBLIC_API_URL?.trim().replace(/\/+$/, "");
+const API_BASE = "/api/v1";
 
 function getApiUrl(path: string) {
   if (!API_BASE) {
