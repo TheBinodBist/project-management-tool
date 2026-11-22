@@ -33,4 +33,18 @@ You can check out [the Next.js GitHub repository](https://github.com/vercel/next
 
 The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
 
+Set this environment variable in the Vercel project:
+
+```env
+NEXT_PUBLIC_API_URL=https://api.example.com/api/v1
+```
+
+Replace `api.example.com` with the backend's public HTTPS hostname. Enter
+`NEXT_PUBLIC_API_URL` as the variable name and only the URL as its value; do not
+include placeholder angle brackets or an undefined port. Apply it to the
+Production environment and create a new deployment, since `NEXT_PUBLIC_*`
+values are embedded when Next.js builds the frontend. The backend needs a valid
+HTTPS certificate; a plain HTTP EC2 address cannot be called by the HTTPS
+frontend.
+
 Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.

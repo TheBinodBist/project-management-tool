@@ -1,6 +1,8 @@
-const API_BASE =
-  process.env.NEXT_PUBLIC_API_URL ;
+const API_BASE = process.env.NEXT_PUBLIC_API_URL;
 
+if (!API_BASE) {
+  throw new Error("NEXT_PUBLIC_API_URL is not configured");
+}
 const ACCESS_TOKEN_KEY = "project-workspace.access";
 const REFRESH_TOKEN_KEY = "project-workspace.refresh";
 
@@ -113,7 +115,7 @@ async function refreshAccessToken() {
   const refresh = getStoredToken(REFRESH_TOKEN_KEY);
   if (!refresh) return null;
 
-  const response = await fetch(`${API_BASE}/auth/refresh/`, {
+  const response = await fetch(getApiUrl("/auth/refresh/"), {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ refresh }),
@@ -162,7 +164,7 @@ export async function apiRequest<T>(
   const access = getAccessToken();
   if (access) headers.set("Authorization", `Bearer ${access}`);
 
-  const request = () => fetch(`${API_BASE}${path}`, { ...init, headers });
+  const request = () => fetch(getApiUrl(path), { ...init, headers });
   let response = await request();
 
   if (response.status === 401 && access) {
