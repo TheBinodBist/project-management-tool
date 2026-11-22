@@ -1,10 +1,12 @@
-
 const API_BASE = "/api/v1";
 
 function getApiUrl(path: string) {
-  return `${API_BASE}${path}`;
-}
+  const normalizedPath = path.startsWith("/")
+    ? path
+    : `/${path}`;
 
+  return `${API_BASE}${normalizedPath}`.replace(/\/+$/, "");
+}
 const ACCESS_TOKEN_KEY = "project-workspace.access";
 const REFRESH_TOKEN_KEY = "project-workspace.refresh";
 
