@@ -28,6 +28,23 @@ export type WorkspaceMember = {
   joined_at: string;
 };
 
+export type WorkspaceInvitation = {
+  email: string;
+  role: string;
+  workspace_name: string;
+  invited_by_name: string | null;
+  expires_at: string;
+  accepted_at: string | null;
+  is_expired: boolean;
+};
+
+export type SentWorkspaceInvitation = {
+  email: string;
+  role: string;
+  expires_at: string;
+  invitation_url: string;
+};
+
 export type Project = {
   id: number;
   workspace: number;
@@ -181,4 +198,17 @@ export function registerRequest(
     method: "POST",
     body: JSON.stringify({ email, full_name, password }),
   });
+}
+
+export function inviteWorkspaceMember(
+  workspaceId: number,
+  email: string,
+) {
+  return apiRequest<SentWorkspaceInvitation>(
+    `/workspaces/${workspaceId}/members/`,
+    {
+      method: "POST",
+      body: JSON.stringify({ email }),
+    },
+  );
 }

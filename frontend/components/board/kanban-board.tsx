@@ -43,6 +43,7 @@ import {
   type Board,
   type BoardColumn,
   type Project,
+  type WorkspaceMember,
 } from "@/lib/api";
 
 type Columns = Record<ColumnId, Task[]>;
@@ -182,9 +183,13 @@ export function KanbanBoard({ projectId }: { projectId?: number }) {
     description: string;
     priority: Priority;
     dueDate: string;
+    assigneeIds: number[];
   } | null>(null);
   const [savingTask, setSavingTask] = React.useState(false);
   const [editError, setEditError] = React.useState<string | null>(null);
+  const [workspaceMembers, setWorkspaceMembers] = React.useState<WorkspaceMember[]>([]);
+  const [membersError, setMembersError] = React.useState<string | null>(null);
+  const [membersLoading, setMembersLoading] = React.useState(false);
   const [loading, setLoading] = React.useState(true);
   const [error, setError] = React.useState<string | null>(null);
   const [reloadKey, setReloadKey] = React.useState(0);
@@ -195,6 +200,37 @@ export function KanbanBoard({ projectId }: { projectId?: number }) {
       coordinateGetter: sortableKeyboardCoordinates,
     }),
   );
+
+  React.useEffect(() => {
+    let active = true;
+    async function loadWorkspaceMembers() {
+      setWorkspaceMembers([]);
+      setMembersError(null);
+      if (!selectedWorkspaceId) {
+        setMembersLoading(false);
+        return;
+      }
+      setMembersLoading(true);
+      try {
+        const members = await apiRequest<WorkspaceMember[]>(
+          `/workspaces/${selectedWorkspaceId}/members/`,
+        );
+        if (active) setWorkspaceMembers(members);
+      } catch (reason) {
+        if (active) {
+          setMembersError(
+            reason instanceof Error ? reason.message : "Could not load workspace members.",
+          );
+        }
+      } finally {
+        if (active) setMembersLoading(false);
+      }
+    }
+    void loadWorkspaceMembers();
+    return () => {
+      active = false;
+    };
+  }, [selectedWorkspaceId]);
 
   React.useEffect(() => {
     let active = true;
@@ -424,6 +460,7 @@ export function KanbanBoard({ projectId }: { projectId?: number }) {
       description: task.description,
       priority: task.priority,
       dueDate: task.dueDate ?? "",
+      assigneeIds: task.assignees.map((assignee) => assignee.id),
     });
     setEditError(null);
   }
@@ -442,6 +479,7 @@ export function KanbanBoard({ projectId }: { projectId?: number }) {
           description: editDraft.description.trim(),
           priority: API_PRIORITIES[editDraft.priority],
           due_date: editDraft.dueDate || null,
+          assignee_ids: editDraft.assigneeIds,
         }),
       });
       const updatedTask = mapTask(saved, editingTask.boardId);
@@ -590,6 +628,45 @@ export function KanbanBoard({ projectId }: { projectId?: number }) {
                   }
                 />
               </label>
+              <fieldset className="space-y-2">
+                <legend className="text-sm font-medium">Assign to</legend>
+                {membersLoading ? (
+                  <p className="text-sm text-muted-foreground">
+                    Loading workspace members…
+                  </p>
+                ) : membersError ? (
+                  <p role="alert" className="text-sm text-destructive">
+                    {membersError}
+                  </p>
+                ) : workspaceMembers.length ? (
+                  <div className="max-h-36 space-y-2 overflow-y-auto rounded-lg border p-3">
+                    {workspaceMembers.map(({ user }) => (
+                      <label key={user.id} className="flex items-center gap-2 text-sm">
+                        <input
+                          type="checkbox"
+                          checked={editDraft.assigneeIds.includes(user.id)}
+                          onChange={(event) => {
+                            const assigneeIds = event.target.checked
+                              ? [...editDraft.assigneeIds, user.id]
+                              : editDraft.assigneeIds.filter((id) => id !== user.id);
+                            setEditDraft({ ...editDraft, assigneeIds });
+                          }}
+                        />
+                        <span className="truncate">
+                          {user.full_name || user.email}
+                          <span className="ml-2 text-muted-foreground">
+                            {user.email}
+                          </span>
+                        </span>
+                      </label>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-sm text-muted-foreground">
+                    No workspace members are available.
+                  </p>
+                )}
+              </fieldset>
               {editError && (
                 <p role="alert" className="text-sm text-destructive">
                   {editError}

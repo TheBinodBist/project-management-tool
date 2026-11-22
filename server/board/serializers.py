@@ -14,6 +14,7 @@ from .models import (
     Role,
     Task,
     Workspace,
+    WorkspaceInvitation,
     WorkspaceMember,
 )
 from .permissions import get_role
@@ -86,6 +87,31 @@ class WorkspaceMemberSerializer(serializers.ModelSerializer):
 class AddMemberSerializer(serializers.Serializer):
     email = serializers.EmailField()
     role = serializers.ChoiceField(choices=Role.choices, default=Role.MEMBER.value)
+
+
+class WorkspaceInvitationSerializer(serializers.ModelSerializer):
+    workspace_name = serializers.CharField(source="workspace.name", read_only=True)
+    invited_by_name = serializers.CharField(
+        source="invited_by.full_name", read_only=True, allow_null=True
+    )
+    is_expired = serializers.SerializerMethodField()
+
+    class Meta:
+        model = WorkspaceInvitation
+        fields = (
+            "email",
+            "role",
+            "workspace_name",
+            "invited_by_name",
+            "expires_at",
+            "accepted_at",
+            "is_expired",
+        )
+
+    def get_is_expired(self, obj):
+        from django.utils import timezone
+
+        return obj.expires_at <= timezone.now()
 
 
 class MemberRoleSerializer(serializers.Serializer):

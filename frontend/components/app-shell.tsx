@@ -25,8 +25,10 @@ function ShellContent({ children }: { children: React.ReactNode }) {
     workspaceSelectionLoaded,
   } = useApp();
   const isAuthPage = pathname === "/login" || pathname === "/register";
+  const isInvitationPage = pathname.startsWith("/invite/");
 
   React.useEffect(() => {
+    if (isInvitationPage) return;
     if (loading || !user) return;
 
     if (!workspaceSelectionLoaded) return;
@@ -65,6 +67,7 @@ function ShellContent({ children }: { children: React.ReactNode }) {
     if (isAuthPage) router.replace("/");
   }, [
     isAuthPage,
+    isInvitationPage,
     loading,
     pathname,
     projects.length,
@@ -80,7 +83,11 @@ function ShellContent({ children }: { children: React.ReactNode }) {
     workspaces.length,
   ]);
 
-  if (isAuthPage && (!user || loading)) return <>{children}</>;
+  if (isInvitationPage) return <>{children}</>;
+
+  if (isAuthPage && (!user || loading)) {
+    return <>{children}</>;
+  }
 
   if (loading || !user) {
     return (

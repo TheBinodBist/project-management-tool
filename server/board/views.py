@@ -1,11 +1,16 @@
+from datetime import timedelta
+
 from django.contrib.auth import get_user_model
+from django.core.mail import send_mail
+from django.conf import settings
 from django.db.models import Count, OuterRef, Prefetch, Q, Subquery
 from django.shortcuts import get_object_or_404
 from django.utils.dateparse import parse_date
+from django.utils import timezone
 from rest_framework import status
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.exceptions import PermissionDenied, ValidationError
-from rest_framework.permissions import IsAuthenticated
+from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 
 from .models import (
@@ -23,6 +28,7 @@ from .models import (
     TaskAssignee,
     TaskLabel,
     Workspace,
+    WorkspaceInvitation,
     WorkspaceMember,
 )
 from .permissions import ROLE_RANK, WorkspacePermission, get_role, require_role
@@ -41,6 +47,7 @@ from .serializers import (
     TaskMoveSerializer,
     TaskSerializer,
     UserIdSerializer,
+    WorkspaceInvitationSerializer,
     WorkspaceMemberSerializer,
     WorkspaceSerializer,
 )
@@ -205,27 +212,93 @@ def workspace_members(request, pk):
             "Only an owner can grant the owner role."
         )
 
+    email = email.lower()
     user = User.objects.filter(email__iexact=email).first()
+    if user and WorkspaceMember.objects.filter(workspace=workspace, user=user).exists():
+        raise ValidationError({"email": "This user is already a member."})
 
-    if user is None:
-        raise ValidationError({
-            "email": "No registered user with this email."
-        })
-
-    member, created = WorkspaceMember.objects.get_or_create(
+    invitation = WorkspaceInvitation.objects.filter(
         workspace=workspace,
-        user=user,
-        defaults={"role": role}
+        email__iexact=email,
+        accepted_at__isnull=True,
+        expires_at__gt=timezone.now(),
+    ).first()
+    if invitation is None:
+        invitation = WorkspaceInvitation.objects.create(
+            workspace=workspace,
+            email=email,
+            role=role,
+            invited_by=request.user,
+        )
+    else:
+        invitation.role = role
+        invitation.invited_by = request.user
+        invitation.expires_at = timezone.now() + timedelta(days=7)
+        invitation.save(update_fields=["role", "invited_by", "expires_at"])
+
+    invitation_url = (
+        f"{settings.FRONTEND_URL.rstrip('/')}/invite/{invitation.token}"
+    )
+    inviter = request.user.full_name or request.user.email
+    send_mail(
+        subject=f"{inviter} invited you to {workspace.name}",
+        message=(
+            f"{inviter} invited you to join the {workspace.name} workspace as a "
+            f"{role}.\n\nAccept the invitation within 7 days:\n{invitation_url}\n"
+        ),
+        from_email=settings.DEFAULT_FROM_EMAIL,
+        recipient_list=[email],
+        fail_silently=False,
     )
 
-    if not created:
-        raise ValidationError(
-            {"email": "This user is already a member."}
-        )
-
     return Response(
-        WorkspaceMemberSerializer(member).data,
-        status=status.HTTP_201_CREATED
+        {
+            "email": invitation.email,
+            "role": invitation.role,
+            "expires_at": invitation.expires_at,
+            "invitation_url": invitation_url,
+        },
+        status=status.HTTP_201_CREATED,
+    )
+
+
+@api_view(["GET"])
+@permission_classes([AllowAny])
+def workspace_invitation_detail(request, token):
+    invitation = get_object_or_404(
+        WorkspaceInvitation.objects.select_related("workspace", "invited_by"),
+        token=token,
+    )
+    return Response(WorkspaceInvitationSerializer(invitation).data)
+
+
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
+def workspace_invitation_accept(request, token):
+    invitation = get_object_or_404(
+        WorkspaceInvitation.objects.select_related("workspace"),
+        token=token,
+    )
+    if invitation.accepted_at is not None:
+        raise ValidationError({"invitation": "This invitation has already been accepted."})
+    if invitation.expires_at <= timezone.now():
+        raise ValidationError({"invitation": "This invitation has expired."})
+    if request.user.email.lower() != invitation.email.lower():
+        raise PermissionDenied("Sign in with the email address this invitation was sent to.")
+
+    WorkspaceMember.objects.get_or_create(
+        workspace=invitation.workspace,
+        user=request.user,
+        defaults={"role": invitation.role},
+    )
+    invitation.accepted_at = timezone.now()
+    invitation.save(update_fields=["accepted_at"])
+    return Response(
+        WorkspaceSerializer(
+            invitation.workspace,
+            context={"request": request},
+        ).data,
+        status=status.HTTP_200_OK,
     )
 
 

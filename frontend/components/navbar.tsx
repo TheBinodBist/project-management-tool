@@ -10,10 +10,21 @@ import { usePathname } from "next/navigation";
 
 import { cn } from "@/lib/utils";
 import { useApp } from "@/lib/app-context";
-import { apiRequest, type WorkspaceMember } from "@/lib/api";
+import {
+  apiRequest,
+  inviteWorkspaceMember,
+  type WorkspaceMember,
+} from "@/lib/api";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 
 interface NavbarProps {
   breadcrumb?: string[];
@@ -30,6 +41,12 @@ export function Navbar({
   const { projects, selectedProject, selectedWorkspace, selectedWorkspaceId } = useApp();
   const [members, setMembers] = React.useState<WorkspaceMember[]>([]);
   const [membersError, setMembersError] = React.useState<string | null>(null);
+  const [shareOpen, setShareOpen] = React.useState(false);
+  const [inviteEmail, setInviteEmail] = React.useState("");
+  const [inviting, setInviting] = React.useState(false);
+  const [inviteError, setInviteError] = React.useState<string | null>(null);
+  const [inviteSent, setInviteSent] = React.useState<string | null>(null);
+  const [membersRefresh, setMembersRefresh] = React.useState(0);
   const projectId = pathname.match(
     /^\/(?:projects|workspace\/[^/]+\/project)\/(\d+)$/,
   )?.[1];
@@ -82,7 +99,30 @@ export function Navbar({
     return () => {
       active = false;
     };
-  }, [selectedWorkspaceId]);
+  }, [membersRefresh, selectedWorkspaceId]);
+
+  async function sendInvitation(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!selectedWorkspaceId) return;
+    setInviting(true);
+    setInviteError(null);
+    setInviteSent(null);
+    try {
+      const invitation = await inviteWorkspaceMember(
+        selectedWorkspaceId,
+        inviteEmail.trim(),
+      );
+      setInviteSent(`Invitation sent to ${invitation.email}.`);
+      setInviteEmail("");
+      setMembersRefresh((current) => current + 1);
+    } catch (reason) {
+      setInviteError(
+        reason instanceof Error ? reason.message : "Could not send invitation.",
+      );
+    } finally {
+      setInviting(false);
+    }
+  }
 
   return (
     <header className={cn("bg-background", className)}>
@@ -147,7 +187,15 @@ export function Navbar({
                 </span>
               )}
             </div>
-            <Button className="h-9 rounded-full px-5 shadow-md shadow-primary/30">
+            <Button
+              className="h-9 rounded-full px-5 shadow-md shadow-primary/30"
+              disabled={!selectedWorkspaceId}
+              onClick={() => {
+                setInviteError(null);
+                setInviteSent(null);
+                setShareOpen(true);
+              }}
+            >
               Share
             </Button>
           </div>
@@ -162,6 +210,67 @@ export function Navbar({
           </Button>
         </div>
       </div>
+      <Dialog open={shareOpen} onOpenChange={setShareOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Share {selectedWorkspace?.name ?? "workspace"}</DialogTitle>
+            <DialogDescription>
+              Invite teammates by email. They can join after accepting the emailed link.
+            </DialogDescription>
+          </DialogHeader>
+          <form className="space-y-3" onSubmit={(event) => void sendInvitation(event)}>
+            <label className="block space-y-2 text-sm font-medium">
+              Email address
+              <Input
+                type="email"
+                required
+                value={inviteEmail}
+                onChange={(event) => setInviteEmail(event.target.value)}
+                placeholder="teammate@example.com"
+              />
+            </label>
+            {inviteError && (
+              <p role="alert" className="text-sm text-destructive">
+                {inviteError}
+              </p>
+            )}
+            {inviteSent && (
+              <p role="status" className="text-sm text-green-700">
+                {inviteSent}
+              </p>
+            )}
+            <Button className="w-full" type="submit" disabled={inviting}>
+              {inviting ? "Sending invitation…" : "Send invitation"}
+            </Button>
+          </form>
+          <div className="space-y-2 border-t pt-4">
+            <h3 className="text-sm font-medium">Workspace members</h3>
+            {membersError ? (
+              <p role="alert" className="text-sm text-destructive">
+                {membersError}
+              </p>
+            ) : members.length ? (
+              <ul className="max-h-48 space-y-2 overflow-y-auto">
+                {members.map(({ id, user, role }) => (
+                  <li key={id} className="flex items-center justify-between text-sm">
+                    <span className="truncate">
+                      {user.full_name || user.email}
+                      <span className="ml-2 text-muted-foreground">{user.email}</span>
+                    </span>
+                    <span className="ml-3 shrink-0 capitalize text-muted-foreground">
+                      {role}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="text-sm text-muted-foreground">
+                No members found for this workspace.
+              </p>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
     </header>
   );
 }

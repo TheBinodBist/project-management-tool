@@ -1,6 +1,14 @@
+import uuid
+from datetime import timedelta
+
 from django.conf import settings
 from django.db import models
+from django.utils import timezone
 from django.utils.text import slugify
+
+
+def invitation_expiry():
+    return timezone.now() + timedelta(days=7)
 
 
 
@@ -83,6 +91,31 @@ class WorkspaceMember(models.Model):
 
     def get_workspace(self):
         return self.workspace
+
+
+class WorkspaceInvitation(models.Model):
+    workspace = models.ForeignKey(
+        Workspace, on_delete=models.CASCADE, related_name="invitations"
+    )
+    email = models.EmailField()
+    role = models.CharField(max_length=100, choices=Role.choices, default=Role.MEMBER)
+    invited_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="sent_workspace_invitations",
+    )
+    token = models.UUIDField(default=uuid.uuid4, unique=True, editable=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+    expires_at = models.DateTimeField(default=invitation_expiry)
+    accepted_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+
+    def __str__(self):
+        return f"{self.email} invited to {self.workspace}"
 
 
 

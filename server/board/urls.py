@@ -8,6 +8,16 @@ urlpatterns = [
     path("workspaces/<int:pk>/", views.workspace_detail, name="workspace-detail"),
     path("workspaces/<int:pk>/members/", views.workspace_members, name="workspace-members"),
     path(
+        "invitations/<uuid:token>/",
+        views.workspace_invitation_detail,
+        name="workspace-invitation-detail",
+    ),
+    path(
+        "invitations/<uuid:token>/accept/",
+        views.workspace_invitation_accept,
+        name="workspace-invitation-accept",
+    ),
+    path(
         "workspaces/<int:pk>/members/<int:user_id>/",
         views.workspace_member_detail,
         name="workspace-member-detail"

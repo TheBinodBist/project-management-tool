@@ -1,5 +1,7 @@
 """Business logic shared by serializers and views: ordering, activity log, notifications."""
 
+from django.conf import settings
+from django.core.mail import send_mail
 from django.db import transaction
 from django.db.models import Case, IntegerField, Max, Value, When
 from rest_framework.exceptions import ValidationError
@@ -112,6 +114,23 @@ def sync_assignees(task, user_ids, actor):
             NotificationKind.ASSIGNED.value,
             f'{display_name(actor)} assigned you to "{task.title}"',
             activity,
+        )
+        recipient = task.assignees.get(pk=user_id)
+        workspace = task.get_workspace()
+        project_url = (
+            f"{settings.FRONTEND_URL.rstrip('/')}/workspace/"
+            f"{workspace.slug}/project/{task.column.board.project_id}"
+        )
+        send_mail(
+            subject=f"You were assigned to {task.title}",
+            message=(
+                f'{display_name(actor)} assigned you to "{task.title}" in the '
+                f"{workspace.name} workspace.\n\n"
+                f"Open the project board: {project_url}\n"
+            ),
+            from_email=settings.DEFAULT_FROM_EMAIL,
+            recipient_list=[recipient.email],
+            fail_silently=False,
         )
     for user_id in sorted(to_remove):
         log_activity(task, actor, ActivityAction.UNASSIGNED.value, user_id=user_id)

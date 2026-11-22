@@ -33,8 +33,9 @@ type AppContextValue = {
   setProjectSearch: (value: string) => void;
   selectWorkspace: (id: number) => void;
   selectProject: (id: number, workspaceId?: number | null) => void;
-  login: (email: string, password: string) => Promise<void>;
-  register: (email: string, name: string, password: string) => Promise<void>;
+  login: (email: string, password: string, invitationToken?: string) => Promise<void>;
+  register: (email: string, name: string, password: string, invitationToken?: string) => Promise<void>;
+  acceptInvitation: (token: string) => Promise<void>;
   logout: () => void;
   createWorkspace: (name: string, description: string) => Promise<Workspace>;
   createProject: (name: string, description: string) => Promise<Project>;
@@ -62,6 +63,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const [loading, setLoading] = React.useState(true);
   const [projectSearch, setProjectSearch] = React.useState("");
   const isAuthPage = pathname === "/login" || pathname === "/register";
+  const isInvitationPage = pathname.startsWith("/invite/");
+  const isPublicPage = isAuthPage || isInvitationPage;
   const projectRequestId = React.useRef(0);
 
   const loadWorkspaces = React.useCallback(async (routeSlug?: string) => {
@@ -89,7 +92,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         if (active) {
           setUser(null);
           setLoading(false);
-          if (!isAuthPage) router.replace("/login");
+          if (!isPublicPage) router.replace("/login");
         }
         return;
       }
@@ -106,7 +109,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         if (!active) return;
         clearTokens();
         setUser(null);
-        if (!isAuthPage) router.replace("/login");
+        if (!isPublicPage) router.replace("/login");
       } finally {
         if (active) setLoading(false);
       }
@@ -116,7 +119,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     return () => {
       active = false;
     };
-  }, [isAuthPage, loadWorkspaces, router]);
+  }, [isPublicPage, loadWorkspaces, router]);
 
   React.useEffect(() => {
     let active = true;
@@ -218,16 +221,26 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     [selectedWorkspaceId],
   );
   const acceptTokens = React.useCallback(
-    async (tokens: { access: string; refresh: string; user: ApiUser }) => {
+    async (
+      tokens: { access: string; refresh: string; user: ApiUser },
+      invitationToken?: string,
+    ) => {
       saveTokens(tokens);
       setUser(tokens.user);
       setLoading(true);
       try {
+        if (invitationToken) {
+          await apiRequest(`/invitations/${invitationToken}/accept/`, {
+            method: "POST",
+          });
+        }
         await loadWorkspaces();
         router.replace("/");
       } catch (error) {
-        clearTokens();
-        setUser(null);
+        if (!invitationToken) {
+          clearTokens();
+          setUser(null);
+        }
         throw error;
       } finally {
         setLoading(false);
@@ -237,17 +250,34 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   );
 
   const login = React.useCallback(
-    async (email: string, password: string) => {
-      await acceptTokens(await loginRequest(email, password));
+    async (email: string, password: string, invitationToken?: string) => {
+      await acceptTokens(await loginRequest(email, password), invitationToken);
     },
     [acceptTokens],
   );
 
   const register = React.useCallback(
-    async (email: string, name: string, password: string) => {
-      await acceptTokens(await registerRequest(email, name, password));
+    async (
+      email: string,
+      name: string,
+      password: string,
+      invitationToken?: string,
+    ) => {
+      await acceptTokens(
+        await registerRequest(email, name, password),
+        invitationToken,
+      );
     },
     [acceptTokens],
+  );
+
+  const acceptInvitation = React.useCallback(
+    async (token: string) => {
+      await apiRequest(`/invitations/${token}/accept/`, { method: "POST" });
+      await loadWorkspaces();
+      router.replace("/");
+    },
+    [loadWorkspaces, router],
   );
 
   const logout = React.useCallback(() => {
@@ -398,6 +428,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       selectProject,
       login,
       register,
+      acceptInvitation,
       logout,
       createWorkspace,
       createProject,
@@ -422,6 +453,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       selectProject,
       login,
       register,
+      acceptInvitation,
       logout,
       createWorkspace,
       createProject,

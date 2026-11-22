@@ -2,6 +2,7 @@
 
 import * as React from "react";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 
 import { useApp } from "@/lib/app-context";
 import { Button } from "@/components/ui/button";
@@ -9,8 +10,13 @@ import { Input } from "@/components/ui/input";
 
 export function AuthForm({ mode }: { mode: "login" | "register" }) {
   const { login, register } = useApp();
+  const searchParams = useSearchParams();
+  const invitationToken = searchParams.get("invite") ?? undefined;
+  const invitationEmail = invitationToken
+    ? searchParams.get("email") ?? ""
+    : "";
   const [name, setName] = React.useState("");
-  const [email, setEmail] = React.useState("");
+  const [email, setEmail] = React.useState(invitationEmail);
   const [password, setPassword] = React.useState("");
   const [error, setError] = React.useState("");
   const [submitting, setSubmitting] = React.useState(false);
@@ -21,8 +27,8 @@ export function AuthForm({ mode }: { mode: "login" | "register" }) {
     setError("");
     setSubmitting(true);
     try {
-      if (isRegister) await register(email, name, password);
-      else await login(email, password);
+      if (isRegister) await register(email, name, password, invitationToken);
+      else await login(email, password, invitationToken);
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "Something went wrong.");
     } finally {
@@ -64,6 +70,7 @@ export function AuthForm({ mode }: { mode: "login" | "register" }) {
               type="email"
               autoComplete="email"
               required
+              readOnly={Boolean(invitationEmail)}
               value={email}
               onChange={(event) => setEmail(event.target.value)}
               placeholder="you@example.com"
@@ -104,7 +111,13 @@ export function AuthForm({ mode }: { mode: "login" | "register" }) {
           {isRegister ? "Already have an account?" : "New to Project Workspace?"}{" "}
           <Link
             className="font-medium text-primary underline-offset-4 hover:underline"
-            href={isRegister ? "/login" : "/register"}
+            href={
+              invitationToken
+                ? `${isRegister ? "/login" : "/register"}?invite=${encodeURIComponent(invitationToken)}`
+                : isRegister
+                  ? "/login"
+                  : "/register"
+            }
           >
             {isRegister ? "Sign in" : "Create an account"}
           </Link>
