@@ -1,5 +1,5 @@
 const API_BASE =
-  process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000/api/v1";
+  process.env.NEXT_PUBLIC_API_URL ;
 
 const ACCESS_TOKEN_KEY = "project-workspace.access";
 const REFRESH_TOKEN_KEY = "project-workspace.refresh";
