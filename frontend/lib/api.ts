@@ -1,8 +1,39 @@
-const API_BASE = process.env.NEXT_PUBLIC_API_URL;
+const API_BASE = process.env.NEXT_PUBLIC_API_URL?.trim().replace(/\/+$/, "");
 
-if (!API_BASE) {
-  throw new Error("NEXT_PUBLIC_API_URL is not configured");
+function getApiUrl(path: string) {
+  if (!API_BASE) {
+    throw new Error(
+      "The API URL is not configured. Set NEXT_PUBLIC_API_URL to your HTTPS backend URL ending in /api/v1, then redeploy the frontend.",
+    );
+  }
+
+  let baseUrl: URL;
+  try {
+    baseUrl = new URL(API_BASE);
+  } catch {
+    throw new Error(
+      "NEXT_PUBLIC_API_URL must be a valid absolute HTTPS backend URL ending in /api/v1.",
+    );
+  }
+
+  const isLocalHttp =
+    baseUrl.protocol === "http:" &&
+    ["localhost", "127.0.0.1", "[::1]"].includes(baseUrl.hostname);
+  const apiPath = baseUrl.pathname.replace(/\/+$/, "");
+  if (
+    (baseUrl.protocol !== "https:" && !isLocalHttp) ||
+    baseUrl.hostname === "undefined" ||
+    /(^|\/)undefined(\/|$)/i.test(apiPath) ||
+    !apiPath.endsWith("/api/v1")
+  ) {
+    throw new Error(
+      "NEXT_PUBLIC_API_URL must be a valid HTTPS backend URL ending in /api/v1.",
+    );
+  }
+
+  return `${baseUrl.href.replace(/\/$/, "")}${path}`;
 }
+
 const ACCESS_TOKEN_KEY = "project-workspace.access";
 const REFRESH_TOKEN_KEY = "project-workspace.refresh";
 
